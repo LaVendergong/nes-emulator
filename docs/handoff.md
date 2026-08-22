@@ -2,7 +2,8 @@
 
 ## 当前状态
 
-Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选盘、换盘、暂停、重启、即时存档、按键换绑。测试盘 `roms/nova.nes`（MMC1）能玩、有声。
+Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选盘、换盘、暂停、重启、即时存档、按键换绑。
+本版（相对上一收尾）：mapper 2 UNROM、APU DMC、游戏常用非官方 6502、MMC1 连续周期写丢掉。存档魔数 NES1 **v2**。测试盘 `roms/nova.nes`（MMC1）能玩、有声。
 
 ## 下一步唯一动作
 
@@ -20,7 +21,8 @@ Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选
 
 - 只做 NTSC 一台 NES。Host 只通过 `nes.console.Console`。
 - Java 17 + Maven，运行时零依赖。窗口 AWT/Java2D，音频 `javax.sound.sampled`。
-- Mapper 逻辑只在 `cart`。当前：0（NROM）、1（MMC1）。
+- Mapper 逻辑只在 `cart`。当前：0（NROM）、1（MMC1，连续 CPU cycle 写丢掉）、2（UNROM）。
+- APU 含 DMC；取样回调由 Console 注入，`apu` 不 import cart。
 - 有声卡时 Host 用 `SourceDataLine.write` 阻塞限速；热路径复用采样缓冲。
 - 换盘/重启是 `new Console(ines)`；暂停是 Host 不调用 `stepFrame`，不按墙钟补步。
 - 即时存档走 `console.saveState`/`loadState`。Host 不拆快照。文件在 `saves/`，不上仓库。
@@ -30,7 +32,7 @@ Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选
 
 ## 仍开放
 
-- 地图里空着的不等于现在要做：DMC、PPU loopy 移位器、其它 mapper、未实现的非官方 6502。
+- 地图里空着的不等于现在要做：PPU loopy 移位器、其它 mapper、不稳定非官方 6502（SHA/SHX/SHY/XAA/LAS）。
 - 产品级「明确不做」用户写过「暂无」；工程围栏在地图「不做」。
 
 ## 验证
@@ -49,8 +51,9 @@ java -cp target/classes nes.host.Main roms\nova.nes
 - `nova.nes` 是 mapper 1、256KB PRG、CHR RAM，不是 NROM。
 - 16KB PRG 复位向量在文件偏移 `16+0x3FFC`，不是 `0x7FFC`。
 - 每帧 `new` 采样数组 + 墙钟 60.00Hz 睡眠会隔几秒卡一下；已改为复用缓冲 + 音频阻塞。
-- MMC1 未忽略连续周期写（RMW 撞银行寄存器可能坏）。PPU 背景用 `t` 算像素，不是逐 dot loopy。
-- 未实现的 6502 操作码会抛异常（带 PC）。
+- MMC1 连续周期写已丢掉（RMW dummy）。PPU 背景用 `t` 算像素，不是逐 dot loopy。
+- 不稳定非官方 6502（SHA/SHX/SHY/XAA/LAS）仍抛异常（带 PC）。
+- 旧即时存档 NES1 v1 不能读；DMC 进快照后升到 v2。
 - 暂停键要挡自动重复，否则 P 会长按连切。
 
 ## 给下一会话的提示词
@@ -60,8 +63,9 @@ java -cp target/classes nes.host.Main roms\nova.nes
 
 这是 Windows 上的 NTSC FC/NES 模拟器。边界以地图为准。Host 只走 nes.console.Console。
 
-当前能玩：mapper 0/1，方波/三角/噪声，无 DMC。Host 有选盘/换盘/暂停/重启/存档槽/换绑。
+当前能玩：mapper 0/1/2，方波/三角/噪声/DMC，游戏常用非官方 6502。Host 有选盘/换盘/暂停/重启/存档槽/换绑。
 测试 ROM：roms/nova.nes。仓库：https://github.com/LaVendergong/nes-emulator
+存档：NES1 v2（v1 拒读）。
 
 动手前写四行：意图 / 改哪些不改哪些 / 风险 / 验证。
 一次只做一个意图。跨模块只走公开入口。不要顺手重构，不要为以后预留层。

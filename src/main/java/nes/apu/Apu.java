@@ -1,8 +1,9 @@
 package nes.apu;
 
 /**
- * NTSC APU：方波×2、三角、噪声。DMC 本切片不发声。
+ * NTSC APU：方波×2、三角、噪声、DMC。
  * 不碰声卡；每个 CPU cycle 推进一次，按 44100 Hz 产出采样。
+ * DMC 取样通过 Console 注入的读回调，不依赖 cart。
  */
 public final class Apu {
     public static final int SAMPLE_RATE = 44100;
@@ -21,10 +22,15 @@ public final class Apu {
         {1, 1, 1, 1, 1, 1, 0, 0}
     };
 
+    private static final int[] DMC_RATE = {
+            428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54
+    };
+
     private final Pulse pulse1 = new Pulse(true);
     private final Pulse pulse2 = new Pulse(false);
     private final Triangle triangle = new Triangle();
     private final Noise noise = new Noise();
+    private final Dmc dmc = new Dmc();
     private final short[] buffer = new short[SAMPLE_RATE * 2];
     private int bufferSize;
     private int samplePhase;
@@ -39,6 +45,7 @@ public final class Apu {
         pulse2.reset();
         triangle.reset();
         noise.reset();
+        dmc.reset();
         bufferSize = 0;
         samplePhase = 0;
         frameCycle = 0;
@@ -65,11 +72,16 @@ public final class Apu {
             case 0x400C -> noise.write0(value);
             case 0x400E -> noise.write2(value);
             case 0x400F -> noise.write3(value);
+            case 0x4010 -> dmc.write4010(value);
+            case 0x4011 -> dmc.write4011(value);
+            case 0x4012 -> dmc.write4012(value);
+            case 0x4013 -> dmc.write4013(value);
             case 0x4015 -> {
                 pulse1.setEnabled((value & 1) != 0);
                 pulse2.setEnabled((value & 2) != 0);
                 triangle.setEnabled((value & 4) != 0);
                 noise.setEnabled((value & 8) != 0);
+                dmc.setEnabled((value & 0x10) != 0);
             }
             case 0x4017 -> {
                 fiveStep = (value & 0x80) != 0;
@@ -102,15 +114,32 @@ public final class Apu {
         if (noise.length > 0) {
             v |= 8;
         }
+        if (dmc.bytesLeft()) {
+            v |= 0x10;
+        }
         if (frameIrq) {
             v |= 0x40;
         }
+        if (dmc.irq) {
+            v |= 0x80;
+        }
         frameIrq = false;
+        dmc.irq = false;
         return v;
     }
 
     public boolean irqAsserted() {
-        return frameIrq;
+        return frameIrq || dmc.irq;
+    }
+
+    public void setDmcRead(java.util.function.IntUnaryOperator reader) {
+        dmc.reader = reader;
+    }
+
+    public int takeDmcStall() {
+        int n = dmc.stall;
+        dmc.stall = 0;
+        return n;
     }
 
     public void tick() {
@@ -121,6 +150,7 @@ public final class Apu {
             noise.clockTimer();
         }
         triangle.clockTimer();
+        dmc.tick();
         clockFrame();
         samplePhase += SAMPLE_RATE;
         if (samplePhase >= CPU_HZ) {
@@ -150,6 +180,7 @@ public final class Apu {
         pulse2.save(out);
         triangle.save(out);
         noise.save(out);
+        dmc.save(out);
         out.writeInt(samplePhase);
         out.writeInt(frameCycle);
         out.writeBoolean(fiveStep);
@@ -163,6 +194,7 @@ public final class Apu {
         pulse2.load(in);
         triangle.load(in);
         noise.load(in);
+        dmc.load(in);
         samplePhase = in.readInt();
         frameCycle = in.readInt();
         fiveStep = in.readBoolean();
@@ -227,7 +259,7 @@ public final class Apu {
         int t = triangle.output();
         int n = noise.output();
         double pulseOut = p == 0 ? 0 : 95.88 / (8128.0 / p + 100);
-        double tnd = t / 8227.0 + n / 12241.0;
+        double tnd = t / 8227.0 + n / 12241.0 + dmc.output / 22638.0;
         double tndOut = tnd == 0 ? 0 : 159.79 / (1.0 / tnd + 100);
         return (int) ((pulseOut + tndOut) * 30000);
     }
@@ -623,6 +655,173 @@ public final class Apu {
             periodIndex = in.readInt();
             length = in.readInt();
             lfsr = in.readInt();
+        }
+    }
+
+    private static final class Dmc {
+        java.util.function.IntUnaryOperator reader;
+        boolean irqEnable;
+        boolean loop;
+        boolean irq;
+        int rateIndex;
+        int timer;
+        int output;
+        int addr;
+        int addrLoad;
+        int length;
+        int lengthLoad;
+        int shift;
+        int bitsLeft;
+        int buffer;
+        int stall;
+        boolean bufferFull;
+        boolean silence = true;
+
+        void reset() {
+            irq = false;
+            irqEnable = false;
+            loop = false;
+            output = 0;
+            length = 0;
+            bitsLeft = 0;
+            silence = true;
+            bufferFull = false;
+            stall = 0;
+            timer = 0;
+        }
+
+        void write4010(int value) {
+            irqEnable = (value & 0x80) != 0;
+            loop = (value & 0x40) != 0;
+            rateIndex = value & 0x0F;
+            if (!irqEnable) {
+                irq = false;
+            }
+        }
+
+        void write4011(int value) {
+            output = value & 0x7F;
+        }
+
+        void write4012(int value) {
+            addrLoad = 0xC000 | (value << 6);
+        }
+
+        void write4013(int value) {
+            lengthLoad = (value << 4) + 1;
+        }
+
+        void setEnabled(boolean on) {
+            if (!on) {
+                length = 0;
+            } else if (length == 0) {
+                restart();
+            }
+            irq = false;
+        }
+
+        boolean bytesLeft() {
+            return length > 0;
+        }
+
+        void tick() {
+            if (timer > 0) {
+                timer--;
+            } else {
+                timer = DMC_RATE[rateIndex] - 1;
+                clockBit();
+            }
+            if (!bufferFull && length > 0) {
+                fetch();
+            }
+        }
+
+        private void restart() {
+            addr = addrLoad;
+            length = lengthLoad;
+        }
+
+        private void clockBit() {
+            if (!silence) {
+                if ((shift & 1) != 0) {
+                    if (output <= 125) {
+                        output += 2;
+                    }
+                } else if (output >= 2) {
+                    output -= 2;
+                }
+                shift >>= 1;
+            }
+            bitsLeft--;
+            if (bitsLeft > 0) {
+                return;
+            }
+            bitsLeft = 8;
+            if (bufferFull) {
+                silence = false;
+                shift = buffer;
+                bufferFull = false;
+            } else {
+                silence = true;
+            }
+        }
+
+        private void fetch() {
+            if (length == 0) {
+                if (loop) {
+                    restart();
+                } else {
+                    if (irqEnable) {
+                        irq = true;
+                    }
+                    return;
+                }
+            }
+            if (reader != null) {
+                buffer = reader.applyAsInt(addr) & 0xFF;
+            }
+            bufferFull = true;
+            addr = addr == 0xFFFF ? 0x8000 : addr + 1;
+            length--;
+            // ponytail: 每次取字节固定 stall 4。天花板：对齐 1–4。升级：按取指重叠算。
+            stall += 4;
+        }
+
+        void save(java.io.DataOutput out) throws java.io.IOException {
+            out.writeBoolean(irqEnable);
+            out.writeBoolean(loop);
+            out.writeBoolean(irq);
+            out.writeInt(rateIndex);
+            out.writeInt(timer);
+            out.writeInt(output);
+            out.writeInt(addr);
+            out.writeInt(addrLoad);
+            out.writeInt(length);
+            out.writeInt(lengthLoad);
+            out.writeInt(shift);
+            out.writeInt(bitsLeft);
+            out.writeInt(buffer);
+            out.writeBoolean(bufferFull);
+            out.writeBoolean(silence);
+        }
+
+        void load(java.io.DataInput in) throws java.io.IOException {
+            irqEnable = in.readBoolean();
+            loop = in.readBoolean();
+            irq = in.readBoolean();
+            rateIndex = in.readInt();
+            timer = in.readInt();
+            output = in.readInt();
+            addr = in.readInt();
+            addrLoad = in.readInt();
+            length = in.readInt();
+            lengthLoad = in.readInt();
+            shift = in.readInt();
+            bitsLeft = in.readInt();
+            buffer = in.readInt();
+            bufferFull = in.readBoolean();
+            silence = in.readBoolean();
+            stall = 0;
         }
     }
 }

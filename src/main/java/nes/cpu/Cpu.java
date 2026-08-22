@@ -696,6 +696,236 @@ public final class Cpu {
                 inc(abxWrite());
                 return 7;
             }
+            case 0x03 -> {
+                slo(izx());
+                return 8;
+            }
+            case 0x07 -> {
+                slo(zp());
+                return 5;
+            }
+            case 0x0B, 0x2B -> {
+                anc(read(imm()));
+                return 2;
+            }
+            case 0x0F -> {
+                slo(abs_());
+                return 6;
+            }
+            case 0x13 -> {
+                slo(izyWrite());
+                return 8;
+            }
+            case 0x17 -> {
+                slo(zpx());
+                return 6;
+            }
+            case 0x1B -> {
+                slo(abyWrite());
+                return 7;
+            }
+            case 0x1F -> {
+                slo(abxWrite());
+                return 7;
+            }
+            case 0x23 -> {
+                rla(izx());
+                return 8;
+            }
+            case 0x27 -> {
+                rla(zp());
+                return 5;
+            }
+            case 0x2F -> {
+                rla(abs_());
+                return 6;
+            }
+            case 0x33 -> {
+                rla(izyWrite());
+                return 8;
+            }
+            case 0x37 -> {
+                rla(zpx());
+                return 6;
+            }
+            case 0x3B -> {
+                rla(abyWrite());
+                return 7;
+            }
+            case 0x3F -> {
+                rla(abxWrite());
+                return 7;
+            }
+            case 0x43 -> {
+                sre(izx());
+                return 8;
+            }
+            case 0x47 -> {
+                sre(zp());
+                return 5;
+            }
+            case 0x4B -> {
+                alr(read(imm()));
+                return 2;
+            }
+            case 0x4F -> {
+                sre(abs_());
+                return 6;
+            }
+            case 0x53 -> {
+                sre(izyWrite());
+                return 8;
+            }
+            case 0x57 -> {
+                sre(zpx());
+                return 6;
+            }
+            case 0x5B -> {
+                sre(abyWrite());
+                return 7;
+            }
+            case 0x5F -> {
+                sre(abxWrite());
+                return 7;
+            }
+            case 0x63 -> {
+                rra(izx());
+                return 8;
+            }
+            case 0x67 -> {
+                rra(zp());
+                return 5;
+            }
+            case 0x6B -> {
+                arr(read(imm()));
+                return 2;
+            }
+            case 0x6F -> {
+                rra(abs_());
+                return 6;
+            }
+            case 0x73 -> {
+                rra(izyWrite());
+                return 8;
+            }
+            case 0x77 -> {
+                rra(zpx());
+                return 6;
+            }
+            case 0x7B -> {
+                rra(abyWrite());
+                return 7;
+            }
+            case 0x7F -> {
+                rra(abxWrite());
+                return 7;
+            }
+            case 0x83 -> {
+                sax(izx());
+                return 6;
+            }
+            case 0x87 -> {
+                sax(zp());
+                return 3;
+            }
+            case 0x8F -> {
+                sax(abs_());
+                return 4;
+            }
+            case 0x97 -> {
+                sax(zpy());
+                return 4;
+            }
+            case 0xA3 -> {
+                lax(izx());
+                return 6;
+            }
+            case 0xA7 -> {
+                lax(zp());
+                return 3;
+            }
+            case 0xAF -> {
+                lax(abs_());
+                return 4;
+            }
+            case 0xB3 -> {
+                return 5 + laxIzY();
+            }
+            case 0xB7 -> {
+                lax(zpy());
+                return 4;
+            }
+            case 0xBF -> {
+                return 4 + laxAbY();
+            }
+            case 0xC3 -> {
+                dcp(izx());
+                return 8;
+            }
+            case 0xC7 -> {
+                dcp(zp());
+                return 5;
+            }
+            case 0xCB -> {
+                axs(read(imm()));
+                return 2;
+            }
+            case 0xCF -> {
+                dcp(abs_());
+                return 6;
+            }
+            case 0xD3 -> {
+                dcp(izyWrite());
+                return 8;
+            }
+            case 0xD7 -> {
+                dcp(zpx());
+                return 6;
+            }
+            case 0xDB -> {
+                dcp(abyWrite());
+                return 7;
+            }
+            case 0xDF -> {
+                dcp(abxWrite());
+                return 7;
+            }
+            case 0xE3 -> {
+                isc(izx());
+                return 8;
+            }
+            case 0xE7 -> {
+                isc(zp());
+                return 5;
+            }
+            case 0xEB -> {
+                sbc(read(imm()));
+                return 2;
+            }
+            case 0xEF -> {
+                isc(abs_());
+                return 6;
+            }
+            case 0xF3 -> {
+                isc(izyWrite());
+                return 8;
+            }
+            case 0xF7 -> {
+                isc(zpx());
+                return 6;
+            }
+            case 0xFB -> {
+                isc(abyWrite());
+                return 7;
+            }
+            case 0xFF -> {
+                isc(abxWrite());
+                return 7;
+            }
+            case 0x02, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x92, 0xB2, 0xD2, 0xF2 -> {
+                pc = (pc - 1) & 0xFFFF;
+                return 2;
+            }
             case 0x04, 0x44, 0x64 -> {
                 zp();
                 return 3;
@@ -938,6 +1168,92 @@ public final class Cpu {
 
     private int nopAbX() {
         return abx()[1];
+    }
+
+    private void lax(int addr) {
+        a = x = read(addr);
+        zn(a);
+    }
+
+    private int laxIzY() {
+        int[] r = izy();
+        lax(r[0]);
+        return r[1];
+    }
+
+    private int laxAbY() {
+        int[] r = aby();
+        lax(r[0]);
+        return r[1];
+    }
+
+    private void sax(int addr) {
+        write(addr, a & x);
+    }
+
+    private void slo(int addr) {
+        int v = aslVal(read(addr));
+        write(addr, v);
+        a |= v;
+        zn(a);
+    }
+
+    private void rla(int addr) {
+        int v = rolVal(read(addr));
+        write(addr, v);
+        a &= v;
+        zn(a);
+    }
+
+    private void sre(int addr) {
+        int v = lsrVal(read(addr));
+        write(addr, v);
+        a ^= v;
+        zn(a);
+    }
+
+    private void rra(int addr) {
+        int v = rorVal(read(addr));
+        write(addr, v);
+        adc(v);
+    }
+
+    private void dcp(int addr) {
+        int v = (read(addr) - 1) & 0xFF;
+        write(addr, v);
+        cmp(a, v);
+    }
+
+    private void isc(int addr) {
+        int v = (read(addr) + 1) & 0xFF;
+        write(addr, v);
+        sbc(v);
+    }
+
+    private void anc(int v) {
+        a &= v;
+        zn(a);
+        setC((p & N) != 0);
+    }
+
+    private void alr(int v) {
+        a = lsrVal(a & v);
+    }
+
+    private void arr(int v) {
+        a &= v;
+        int c = p & C;
+        a = (a >> 1) | (c << 7);
+        zn(a);
+        setC((a & 0x40) != 0);
+        setV((((a >> 6) ^ (a >> 5)) & 1) != 0);
+    }
+
+    private void axs(int v) {
+        int t = (a & x) - v;
+        setC(t >= 0);
+        x = t & 0xFF;
+        zn(x);
     }
 
     private void bit(int addr) {

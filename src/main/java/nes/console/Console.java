@@ -10,7 +10,7 @@ import nes.ppu.Ppu;
 /** Host 的唯一入口。 */
 public final class Console {
     private static final int STATE_MAGIC = 0x4E455331;
-    private static final int STATE_VERSION = 1;
+    private static final int STATE_VERSION = 2;
 
     private final Cartridge cart;
     private final Ppu ppu;
@@ -23,6 +23,7 @@ public final class Console {
         this.ppu = new Ppu(cart);
         this.apu = new Apu();
         this.bus = new Bus(cart, ppu, apu);
+        this.apu.setDmcRead(addr -> this.bus.read(addr));
         this.cpu = new Cpu(bus);
         ppu.reset();
         apu.reset();
@@ -125,10 +126,12 @@ public final class Console {
     }
 
     private void tickCpuCycle() {
+        cart.clockCpu();
         ppu.tick();
         ppu.tick();
         ppu.tick();
         apu.tick();
+        cpu.stall(apu.takeDmcStall());
         if (ppu.pullNmi()) {
             cpu.nmi();
         }

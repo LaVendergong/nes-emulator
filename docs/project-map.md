@@ -35,7 +35,7 @@ Windows 上的 FC/NES 模拟器：你提供 ROM，本机把游戏跑到约 60 �
 | `bus` | CPU 地址译码，接到 RAM / PPU / APU / cart | `read` / `write`；快照 | cart, ppu 寄存器口, apu 寄存器口 | host, cpu 内部 |
 | `cpu` | 6502 | 步进周期；NMI/IRQ/Reset 线；快照 | bus | cart / ppu / apu / host |
 | `ppu` | 图像与 NMI | 步进 dot；取帧缓冲；快照 | cart 的 PPU 口（CHR/VRAM 映射） | host / cpu / apu |
-| `apu` | 方波/三角/噪声；DMC 不发声 | `tick`、`write`、`read4015`、`drain`、IRQ；快照 | 无 | host / cpu / ppu / cart |
+| `apu` | 方波/三角/噪声/DMC | `tick`、`write`、`read4015`、`drain`、IRQ、`setDmcRead`、`takeDmcStall`；快照 | 无（DMC 取样走 Console 注入的读回调） | host / cpu / ppu / cart |
 | `console` | 把上面焊成一台机器，按帧/周期推进 | `new Console(ines)`、`stepFrame`、`stepInstruction`、`framebuffer`、`drainSamples`、`setButtons`、`peekCpu`、`cpuCycles`/`ppuDots`、`saveState`/`loadState` | cpu, ppu, apu, bus, cart | 无（唯一对外门面） |
 | `host` | Windows 窗口、按键、音频、会话控制 | `Main`：选盘、换盘、暂停、重启、存档槽、换绑 | 只依赖 console | cpu / ppu / apu / bus / cart |
 
@@ -49,7 +49,7 @@ Windows 上的 FC/NES 模拟器：你提供 ROM，本机把游戏跑到约 60 �
 6. 按键在每帧开始写入手柄状态。
 7. 暂停时 Host 不调用 `stepFrame`，NES 时间冻结；继续时不按墙钟补步。
 8. 换盘与重启都是 `new Console(ines)`，不在 Host 里拆 ROM。
-9. 即时存档：`console.saveState`/`loadState`（魔数 NES1 v1）。Host 在 `saves/<rom名>/` 放最多 N 个槽（默认 10，1–30 可调），可覆盖。弹窗点有档槽即读档继续。
+9. 即时存档：`console.saveState`/`loadState`（魔数 NES1 **v2**；v1 槽拒读）。Host 在 `saves/<rom名>/` 放最多 N 个槽（默认 10，1–30 可调），可覆盖。弹窗点有档槽即读档继续。
 10. 手柄键表在 Host：弹窗画键盘，涂色=已绑定；点涂色键再按键或点键盘完成换绑。O/P/空格/R/F5/Esc 留给 Host。写入 `saves/keys.txt`。
 
 ## 不变量
@@ -86,7 +86,7 @@ java -cp target/classes nes.selfcheck.SelfCheck
 java -cp target/classes nes.host.Main 路径\到\rom.nes
 ```
 
-当前切片：mapper 0 与 1（MMC1）；APU 无 DMC。
+当前切片：mapper 0 / 1（MMC1，连续周期写丢掉）/ 2（UNROM）；APU 含 DMC。
+游戏会用到的非官方 6502（SLO/RLA/SRE/RRA、LAX/SAX、DCP/ISC、`$EB`、ANC/ALR/ARR/AXS、JAM）已实现；不稳定组合（SHA/SHX/SHY/XAA/LAS）仍抛异常（带 PC）。
 Host 手柄：默认可换绑（Z=A X=B Shift/A=Select Enter=Start 方向键）。菜单「切换按键...」。
 Host 会话：菜单「游戏」或 O=打开/换盘，P/空格=暂停，R=重启，F5=存档槽。
-未实现的 6502 操作码会抛异常（带 PC）。

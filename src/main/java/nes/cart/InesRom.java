@@ -1,7 +1,7 @@
 package nes.cart;
 
 /**
- * 信任边界：校验 iNES。当前接受 mapper 0 与 1。
+ * 信任边界：校验 iNES。当前接受 mapper 0、1、2。
  */
 public final class InesRom {
     private InesRom() {}
@@ -27,7 +27,7 @@ public final class InesRom {
         if (mapper == 0 && prgBanks != 1 && prgBanks != 2) {
             throw new IllegalArgumentException("NROM 只接受 16K 或 32K PRG");
         }
-        if (mapper != 0 && mapper != 1) {
+        if (mapper != 0 && mapper != 1 && mapper != 2) {
             throw new IllegalArgumentException("不支持 mapper " + mapper);
         }
         int trainer = (flag6 & 0x04) != 0 ? 512 : 0;
@@ -49,10 +49,13 @@ public final class InesRom {
             System.arraycopy(file, 16 + trainer + prgSize, chr, 0, chrFile);
             chrRam = false;
         }
+        boolean vertical = (flag6 & 0x01) != 0;
         if (mapper == 1) {
             return new Mmc1(prg, chr, chrRam);
         }
-        boolean vertical = (flag6 & 0x01) != 0;
+        if (mapper == 2) {
+            return new Unrom(prg, chr, chrRam, vertical);
+        }
         return new Nrom(prg, chr, chrRam, vertical);
     }
 }

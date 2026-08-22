@@ -20,4 +20,7 @@ public interface Cartridge {
     void saveState(DataOutput out) throws IOException;
 
     void loadState(DataInput in) throws IOException;
+
+    /** 每个 CPU cycle。MMC1 用来丢掉 RMW 的第二次写。 */
+    default void clockCpu() {}
 }

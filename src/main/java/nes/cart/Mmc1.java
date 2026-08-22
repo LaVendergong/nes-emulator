@@ -2,7 +2,7 @@ package nes.cart;
 
 /**
  * Mapper 1（MMC1 / SxROM）。串行写 $8000–$FFFF。
- * ponytail: 不忽略连续周期写。天花板：RMW 碰到银行寄存器。升级：按 CPU cycle 丢弃连写。
+ * 连续 CPU cycle 上的第二次写丢掉（RMW 的 dummy write）。
  */
 final class Mmc1 implements Cartridge {
     private final byte[] prg;
@@ -15,6 +15,7 @@ final class Mmc1 implements Cartridge {
     private int prgBank;
     private int shift;
     private int shiftCount;
+    private int quiet = 2;
 
     Mmc1(byte[] prg, byte[] chr, boolean chrRam) {
         this.prg = prg;
@@ -39,6 +40,10 @@ final class Mmc1 implements Cartridge {
         address &= 0xFFFF;
         value &= 0xFF;
         if (address >= 0x8000) {
+            if (quiet == 0) {
+                return;
+            }
+            quiet = 0;
             if ((value & 0x80) != 0) {
                 shift = 0;
                 shiftCount = 0;
@@ -138,6 +143,7 @@ final class Mmc1 implements Cartridge {
         out.writeInt(prgBank);
         out.writeInt(shift);
         out.writeInt(shiftCount);
+        out.writeInt(quiet);
     }
 
     @Override
@@ -158,5 +164,13 @@ final class Mmc1 implements Cartridge {
         prgBank = in.readInt();
         shift = in.readInt();
         shiftCount = in.readInt();
+        quiet = in.readInt();
+    }
+
+    @Override
+    public void clockCpu() {
+        if (quiet < 8) {
+            quiet++;
+        }
     }
 }

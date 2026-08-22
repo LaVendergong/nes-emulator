@@ -63,7 +63,7 @@ public final class SelfCheck {
         boolean rejected = false;
         try {
             byte[] bad = rom.clone();
-            bad[6] = 0x20;
+            bad[6] = 0x40;
             InesRom.load(bad);
         } catch (IllegalArgumentException e) {
             rejected = e.getMessage().contains("mapper");
@@ -73,10 +73,24 @@ public final class SelfCheck {
         Cartridge mmc1 = InesRom.load(mmc1TwoBanks());
         check(mmc1.cpuRead(0x8000) == 0xAA, "MMC1 复位 $8000 应是 PRG 第 0 页");
         check(mmc1.cpuRead(0xC000) == 0xBB, "MMC1 复位 $C000 应固定最后一页");
-        for (int i = 0; i < 5; i++) {
-            mmc1.cpuWrite(0xE000, (1 >> i) & 1);
-        }
+        mmc1Serial(mmc1, 0xE000, 1);
         check(mmc1.cpuRead(0x8000) == 0xBB, "MMC1 切银行后 $8000 应是第 1 页");
+        mmc1.clockCpu();
+        mmc1.cpuWrite(0x8000, 0x80);
+        int afterReset = mmc1.cpuRead(0x8000);
+        mmc1.cpuWrite(0xE000, 1);
+        mmc1.cpuWrite(0xE000, 1);
+        mmc1.cpuWrite(0xE000, 1);
+        mmc1.cpuWrite(0xE000, 1);
+        mmc1.cpuWrite(0xE000, 1);
+        check(mmc1.cpuRead(0x8000) == afterReset, "MMC1 连续周期写应丢掉，银行不变");
+
+        Cartridge unrom = InesRom.load(unromTwoBanks());
+        check(unrom.cpuRead(0x8000) == 0xAA, "UNROM 复位 $8000 应是第 0 页");
+        check(unrom.cpuRead(0xC000) == 0xBB, "UNROM $C000 应固定最后一页");
+        unrom.cpuWrite(0x8000, 1);
+        check(unrom.cpuRead(0x8000) == 0xBB, "UNROM 切银行后 $8000 应是第 1 页");
+        check(unrom.cpuRead(0xC000) == 0xBB, "UNROM 切银行后 $C000 仍是最后一页");
 
         nes.drainSamples();
         long audioCpu0 = nes.cpuCycles();
@@ -101,7 +115,33 @@ public final class SelfCheck {
         }
         check(peak > 200, "方波应产出非静音采样，峰值 " + peak);
 
+        Console lax = new Console(nromLaxSax());
+        for (int i = 0; i < 4; i++) {
+            lax.stepFrame();
+        }
+        check(lax.peekCpu(0x0011) == 0xAA, "LAX/SAX 后 $11 应为 $AA，实际 $"
+                + Integer.toHexString(lax.peekCpu(0x0011)));
+
+        Console dmc = new Console(nromDmc());
+        dmc.drainSamples();
+        for (int i = 0; i < 8; i++) {
+            dmc.stepFrame();
+        }
+        short[] pcm = dmc.drainSamples();
+        int dmcPeak = 0;
+        for (short s : pcm) {
+            dmcPeak = Math.max(dmcPeak, Math.abs(s));
+        }
+        check(dmcPeak > 50, "DMC 应产出非静音采样，峰值 " + dmcPeak);
+
         System.out.println("selfcheck ok");
+    }
+
+    private static void mmc1Serial(Cartridge cart, int address, int value) {
+        for (int i = 0; i < 5; i++) {
+            cart.clockCpu();
+            cart.cpuWrite(address, (value >> i) & 1);
+        }
     }
 
     private static void check(boolean ok, String message) {
@@ -170,6 +210,67 @@ public final class SelfCheck {
             0x4C, 0x1A, (byte) 0x80
         };
         System.arraycopy(code, 0, file, 16, code.length);
+        file[16 + 0x3FFC] = 0x00;
+        file[16 + 0x3FFD] = (byte) 0x80;
+        return file;
+    }
+
+    /** 32K PRG、CHR RAM、mapper 2：第 0 页 $AA，最后一页 $BB。 */
+    private static byte[] unromTwoBanks() {
+        byte[] file = new byte[16 + 32768];
+        file[0] = 'N';
+        file[1] = 'E';
+        file[2] = 'S';
+        file[3] = 0x1A;
+        file[4] = 2;
+        file[5] = 0;
+        file[6] = 0x20;
+        file[16] = (byte) 0xAA;
+        file[16 + 0x4000] = (byte) 0xBB;
+        return file;
+    }
+
+    /** LAX zp / SAX zp。 */
+    private static byte[] nromLaxSax() {
+        byte[] file = new byte[16 + 16384 + 8192];
+        file[0] = 'N';
+        file[1] = 'E';
+        file[2] = 'S';
+        file[3] = 0x1A;
+        file[4] = 1;
+        file[5] = 1;
+        byte[] code = {
+            (byte) 0xA9, (byte) 0xAA, (byte) 0x85, 0x10,
+            (byte) 0xA7, 0x10, (byte) 0x87, 0x11,
+            0x4C, 0x08, (byte) 0x80
+        };
+        System.arraycopy(code, 0, file, 16, code.length);
+        file[16 + 0x3FFC] = 0x00;
+        file[16 + 0x3FFD] = (byte) 0x80;
+        return file;
+    }
+
+    /** 开 DMC，样本在 $C000。 */
+    private static byte[] nromDmc() {
+        byte[] file = new byte[16 + 16384 + 8192];
+        file[0] = 'N';
+        file[1] = 'E';
+        file[2] = 'S';
+        file[3] = 0x1A;
+        file[4] = 1;
+        file[5] = 1;
+        byte[] code = {
+            0x78,
+            (byte) 0xA9, 0x4F, (byte) 0x8D, 0x10, 0x40,
+            (byte) 0xA9, 0x01, (byte) 0x8D, 0x12, 0x40,
+            (byte) 0xA9, 0x10, (byte) 0x8D, 0x13, 0x40,
+            (byte) 0xA9, 0x10, (byte) 0x8D, 0x15, 0x40,
+            0x4C, 0x15, (byte) 0x80
+        };
+        System.arraycopy(code, 0, file, 16, code.length);
+        for (int i = 0x40; i < 0x3FFC; i++) {
+            file[16 + i] = (byte) 0x55;
+        }
         file[16 + 0x3FFC] = 0x00;
         file[16 + 0x3FFD] = (byte) 0x80;
         return file;
