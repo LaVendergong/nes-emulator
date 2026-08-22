@@ -3,6 +3,8 @@ package nes.selfcheck;
 import nes.console.Console;
 import nes.cart.Cartridge;
 import nes.cart.InesRom;
+import nes.host.Session;
+import nes.host.KeyBindings;
 
 /**
  * 钉住本切片不变量。失败即非零退出。
@@ -36,11 +38,27 @@ public final class SelfCheck {
         }
         check(nes.cpuCycles() == frozenCpu && nes.ppuDots() == frozenPpu, "墙钟流逝不得补 NES 步");
 
+        Console restarted = new Console(rom);
+        check(restarted.cpuCycles() < nes.cpuCycles(), "重启（新 Console）不得继承周期");
+        check(restarted.peekCpu(0x8000) == 0x78, "重启后 $8000 仍来自同一盘");
+        Session.verify(rom);
+        KeyBindings.verify();
+
         for (int i = 0; i < 12; i++) {
             nes.stepFrame();
         }
         int pix = nes.framebuffer()[120 * 256 + 128];
         check(pix == 0xFFB53120, "第一帧中心应为调色板 $16，实际 0x" + Integer.toHexString(pix));
+
+        byte[] shot = nes.saveState();
+        long savedCpu = nes.cpuCycles();
+        long savedPpu = nes.ppuDots();
+        nes.stepFrame();
+        check(nes.cpuCycles() != savedCpu, "存档后步进周期应变");
+        nes.loadState(shot);
+        check(nes.cpuCycles() == savedCpu && nes.ppuDots() == savedPpu, "读档应回到存档时的时钟");
+        check(nes.framebuffer()[120 * 256 + 128] == pix, "读档应恢复帧缓冲");
+        check(nes.peekCpu(0x8000) == 0x78, "读档后 $8000 仍来自 cart");
 
         boolean rejected = false;
         try {

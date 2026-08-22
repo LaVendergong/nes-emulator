@@ -30,6 +30,25 @@ public final class Bus implements CpuMemory {
         return n;
     }
 
+    public void save(java.io.DataOutput out) throws java.io.IOException {
+        out.writeInt(ram.length);
+        out.write(ram);
+        out.writeInt(controller);
+        out.writeInt(controllerShift);
+        out.writeInt(dmaStall);
+    }
+
+    public void load(java.io.DataInput in) throws java.io.IOException {
+        int n = in.readInt();
+        if (n != ram.length) {
+            throw new java.io.IOException("RAM 长度不匹配");
+        }
+        in.readFully(ram);
+        controller = in.readInt();
+        controllerShift = in.readInt();
+        dmaStall = in.readInt();
+    }
+
     @Override
     public int read(int address) {
         address &= 0xFFFF;

@@ -121,4 +121,42 @@ final class Mmc1 implements Cartridge {
         bank = (address < 0x1000 ? chr0 : chr1) & 0x1F;
         return (bank * 0x1000 + (address & 0x0FFF)) % chr.length;
     }
+
+    @Override
+    public void saveState(java.io.DataOutput out) throws java.io.IOException {
+        out.writeInt(1);
+        out.writeInt(prg.length);
+        out.writeInt(chr.length);
+        out.writeBoolean(chrRam);
+        out.write(prgRam);
+        if (chrRam) {
+            out.write(chr);
+        }
+        out.writeInt(control);
+        out.writeInt(chr0);
+        out.writeInt(chr1);
+        out.writeInt(prgBank);
+        out.writeInt(shift);
+        out.writeInt(shiftCount);
+    }
+
+    @Override
+    public void loadState(java.io.DataInput in) throws java.io.IOException {
+        if (in.readInt() != 1) {
+            throw new java.io.IOException("存档不是 MMC1");
+        }
+        if (in.readInt() != prg.length || in.readInt() != chr.length || in.readBoolean() != chrRam) {
+            throw new java.io.IOException("存档与当前盘不匹配");
+        }
+        in.readFully(prgRam);
+        if (chrRam) {
+            in.readFully(chr);
+        }
+        control = in.readInt();
+        chr0 = in.readInt();
+        chr1 = in.readInt();
+        prgBank = in.readInt();
+        shift = in.readInt();
+        shiftCount = in.readInt();
+    }
 }

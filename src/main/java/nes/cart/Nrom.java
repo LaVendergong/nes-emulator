@@ -61,4 +61,30 @@ final class Nrom implements Cartridge {
         }
         return ((off & 0x800) >> 1) | (off & 0x3FF);
     }
+
+    @Override
+    public void saveState(java.io.DataOutput out) throws java.io.IOException {
+        out.writeInt(0);
+        out.writeInt(prg.length);
+        out.writeInt(chr.length);
+        out.writeBoolean(chrRam);
+        out.write(prgRam);
+        if (chrRam) {
+            out.write(chr);
+        }
+    }
+
+    @Override
+    public void loadState(java.io.DataInput in) throws java.io.IOException {
+        if (in.readInt() != 0) {
+            throw new java.io.IOException("存档不是 NROM");
+        }
+        if (in.readInt() != prg.length || in.readInt() != chr.length || in.readBoolean() != chrRam) {
+            throw new java.io.IOException("存档与当前盘不匹配");
+        }
+        in.readFully(prgRam);
+        if (chrRam) {
+            in.readFully(chr);
+        }
+    }
 }

@@ -9,13 +9,17 @@ import nes.ppu.Ppu;
 
 /** Host 的唯一入口。 */
 public final class Console {
+    private static final int STATE_MAGIC = 0x4E455331;
+    private static final int STATE_VERSION = 1;
+
+    private final Cartridge cart;
     private final Ppu ppu;
     private final Apu apu;
     private final Bus bus;
     private final Cpu cpu;
 
     public Console(byte[] ines) {
-        Cartridge cart = InesRom.load(ines);
+        this.cart = InesRom.load(ines);
         this.ppu = new Ppu(cart);
         this.apu = new Apu();
         this.bus = new Bus(cart, ppu, apu);
@@ -72,6 +76,46 @@ public final class Console {
 
     public int peekCpu(int address) {
         return bus.read(address);
+    }
+
+    public byte[] saveState() {
+        java.io.ByteArrayOutputStream raw = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream out = new java.io.DataOutputStream(raw);
+        try {
+            out.writeInt(STATE_MAGIC);
+            out.writeInt(STATE_VERSION);
+            cpu.save(out);
+            bus.save(out);
+            ppu.save(out);
+            apu.save(out);
+            cart.saveState(out);
+            out.flush();
+            return raw.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("存档失败", e);
+        }
+    }
+
+    public void loadState(byte[] data) {
+        if (data == null || data.length < 8) {
+            throw new IllegalArgumentException("存档为空");
+        }
+        java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(data));
+        try {
+            if (in.readInt() != STATE_MAGIC) {
+                throw new IllegalArgumentException("不是本模拟器存档");
+            }
+            if (in.readInt() != STATE_VERSION) {
+                throw new IllegalArgumentException("存档版本不兼容");
+            }
+            cpu.load(in);
+            bus.load(in);
+            ppu.load(in);
+            apu.load(in);
+            cart.loadState(in);
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("存档损坏或与当前盘不匹配", e);
+        }
     }
 
     private void clock(int cpuCycles) {

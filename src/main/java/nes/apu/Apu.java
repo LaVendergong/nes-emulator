@@ -145,6 +145,33 @@ public final class Apu {
         return n;
     }
 
+    public void save(java.io.DataOutput out) throws java.io.IOException {
+        pulse1.save(out);
+        pulse2.save(out);
+        triangle.save(out);
+        noise.save(out);
+        out.writeInt(samplePhase);
+        out.writeInt(frameCycle);
+        out.writeBoolean(fiveStep);
+        out.writeBoolean(irqInhibit);
+        out.writeBoolean(frameIrq);
+        out.writeBoolean(oddCycle);
+    }
+
+    public void load(java.io.DataInput in) throws java.io.IOException {
+        pulse1.load(in);
+        pulse2.load(in);
+        triangle.load(in);
+        noise.load(in);
+        samplePhase = in.readInt();
+        frameCycle = in.readInt();
+        fiveStep = in.readBoolean();
+        irqInhibit = in.readBoolean();
+        frameIrq = in.readBoolean();
+        oddCycle = in.readBoolean();
+        bufferSize = 0;
+    }
+
     private void clockFrame() {
         frameCycle++;
         if (!fiveStep) {
@@ -240,6 +267,24 @@ public final class Apu {
 
         int volume() {
             return constant ? period : decay;
+        }
+
+        void save(java.io.DataOutput out) throws java.io.IOException {
+            out.writeBoolean(start);
+            out.writeBoolean(loop);
+            out.writeBoolean(constant);
+            out.writeInt(period);
+            out.writeInt(divider);
+            out.writeInt(decay);
+        }
+
+        void load(java.io.DataInput in) throws java.io.IOException {
+            start = in.readBoolean();
+            loop = in.readBoolean();
+            constant = in.readBoolean();
+            period = in.readInt();
+            divider = in.readInt();
+            decay = in.readInt();
         }
     }
 
@@ -353,6 +398,40 @@ public final class Apu {
             }
             return envelope.volume();
         }
+
+        void save(java.io.DataOutput out) throws java.io.IOException {
+            envelope.save(out);
+            out.writeBoolean(enabled);
+            out.writeBoolean(halt);
+            out.writeInt(duty);
+            out.writeInt(dutyPos);
+            out.writeInt(timer);
+            out.writeInt(period);
+            out.writeInt(length);
+            out.writeBoolean(sweepEnable);
+            out.writeBoolean(sweepNegate);
+            out.writeBoolean(sweepReload);
+            out.writeInt(sweepPeriod);
+            out.writeInt(sweepShift);
+            out.writeInt(sweepDivider);
+        }
+
+        void load(java.io.DataInput in) throws java.io.IOException {
+            envelope.load(in);
+            enabled = in.readBoolean();
+            halt = in.readBoolean();
+            duty = in.readInt();
+            dutyPos = in.readInt();
+            timer = in.readInt();
+            period = in.readInt();
+            length = in.readInt();
+            sweepEnable = in.readBoolean();
+            sweepNegate = in.readBoolean();
+            sweepReload = in.readBoolean();
+            sweepPeriod = in.readInt();
+            sweepShift = in.readInt();
+            sweepDivider = in.readInt();
+        }
     }
 
     private static final class Triangle {
@@ -434,6 +513,30 @@ public final class Apu {
             }
             return seq < 16 ? 15 - seq : seq - 16;
         }
+
+        void save(java.io.DataOutput out) throws java.io.IOException {
+            out.writeBoolean(enabled);
+            out.writeBoolean(control);
+            out.writeBoolean(reloadFlag);
+            out.writeInt(reload);
+            out.writeInt(linear);
+            out.writeInt(timer);
+            out.writeInt(period);
+            out.writeInt(length);
+            out.writeInt(seq);
+        }
+
+        void load(java.io.DataInput in) throws java.io.IOException {
+            enabled = in.readBoolean();
+            control = in.readBoolean();
+            reloadFlag = in.readBoolean();
+            reload = in.readInt();
+            linear = in.readInt();
+            timer = in.readInt();
+            period = in.readInt();
+            length = in.readInt();
+            seq = in.readInt();
+        }
     }
 
     private static final class Noise {
@@ -498,6 +601,28 @@ public final class Apu {
                 return 0;
             }
             return envelope.volume();
+        }
+
+        void save(java.io.DataOutput out) throws java.io.IOException {
+            envelope.save(out);
+            out.writeBoolean(enabled);
+            out.writeBoolean(halt);
+            out.writeBoolean(shortMode);
+            out.writeInt(timer);
+            out.writeInt(periodIndex);
+            out.writeInt(length);
+            out.writeInt(lfsr);
+        }
+
+        void load(java.io.DataInput in) throws java.io.IOException {
+            envelope.load(in);
+            enabled = in.readBoolean();
+            halt = in.readBoolean();
+            shortMode = in.readBoolean();
+            timer = in.readInt();
+            periodIndex = in.readInt();
+            length = in.readInt();
+            lfsr = in.readInt();
         }
     }
 }

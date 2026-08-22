@@ -58,6 +58,32 @@ public final class Cpu {
         return cycles;
     }
 
+    public void save(java.io.DataOutput out) throws java.io.IOException {
+        out.writeInt(a);
+        out.writeInt(x);
+        out.writeInt(y);
+        out.writeInt(sp);
+        out.writeInt(pc);
+        out.writeInt(p);
+        out.writeBoolean(nmi);
+        out.writeBoolean(irq);
+        out.writeInt(stall);
+        out.writeLong(cycles);
+    }
+
+    public void load(java.io.DataInput in) throws java.io.IOException {
+        a = in.readInt();
+        x = in.readInt();
+        y = in.readInt();
+        sp = in.readInt();
+        pc = in.readInt();
+        p = in.readInt();
+        nmi = in.readBoolean();
+        irq = in.readBoolean();
+        stall = in.readInt();
+        cycles = in.readLong();
+    }
+
     public int step() {
         if (stall > 0) {
             stall--;

@@ -103,6 +103,65 @@ public final class Ppu {
         return dots;
     }
 
+    public void save(java.io.DataOutput out) throws java.io.IOException {
+        writeInts(out, pixels);
+        writeInts(out, nametable);
+        writeInts(out, palette);
+        writeInts(out, oam);
+        out.writeInt(ctrl);
+        out.writeInt(mask);
+        out.writeInt(status);
+        out.writeInt(oamAddr);
+        out.writeInt(v);
+        out.writeInt(t);
+        out.writeInt(fineX);
+        out.writeBoolean(writeLatch);
+        out.writeInt(readBuffer);
+        out.writeInt(scanline);
+        out.writeInt(dot);
+        out.writeBoolean(nmiLine);
+        out.writeBoolean(frameReady);
+        out.writeLong(dots);
+    }
+
+    public void load(java.io.DataInput in) throws java.io.IOException {
+        readInts(in, pixels);
+        readInts(in, nametable);
+        readInts(in, palette);
+        readInts(in, oam);
+        ctrl = in.readInt();
+        mask = in.readInt();
+        status = in.readInt();
+        oamAddr = in.readInt();
+        v = in.readInt();
+        t = in.readInt();
+        fineX = in.readInt();
+        writeLatch = in.readBoolean();
+        readBuffer = in.readInt();
+        scanline = in.readInt();
+        dot = in.readInt();
+        nmiLine = in.readBoolean();
+        frameReady = in.readBoolean();
+        dots = in.readLong();
+    }
+
+    private static void writeInts(java.io.DataOutput out, int[] a) throws java.io.IOException {
+        out.writeInt(a.length);
+        for (int v : a) {
+            out.writeInt(v);
+        }
+    }
+
+    private static void readInts(java.io.DataInput in, int[] a) throws java.io.IOException {
+        int n = in.readInt();
+        if (n != a.length) {
+            throw new java.io.IOException("PPU 数组长度不匹配");
+        }
+        for (int i = 0; i < n; i++) {
+            a[i] = in.readInt();
+        }
+    }
+
     public int readRegister(int reg) {
         switch (reg & 7) {
             case 2 -> {

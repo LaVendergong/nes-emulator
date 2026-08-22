@@ -6,3 +6,4 @@
 roms/*
 !roms/.gitkeep
 !roms/ATTRIBUTION.md
+saves/
