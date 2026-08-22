@@ -84,7 +84,10 @@ Windows 上的 FC/NES 模拟器：你提供 ROM，本机把游戏跑到约 60 �
 mvn -q compile
 java -cp target/classes nes.selfcheck.SelfCheck
 java -cp target/classes nes.host.Main 路径\到\rom.nes
+powershell -File scripts/package-win.ps1
 ```
+
+Windows 发布：解压 `dist/fc-nes-*-windows.zip`，双击 `FC-NES.exe`（自带运行时，不用预装 Java）。存档写在 exe 旁的 `saves/`。
 
 当前切片：mapper 0 / 1（MMC1，连续周期写丢掉）/ 2（UNROM）；APU 含 DMC。
 游戏会用到的非官方 6502（SLO/RLA/SRE/RRA、LAX/SAX、DCP/ISC、`$EB`、ANC/ALR/ARR/AXS、JAM）已实现；不稳定组合（SHA/SHX/SHY/XAA/LAS）仍抛异常（带 PC）。

@@ -22,7 +22,9 @@ public final class KeyBindings {
     static final int LEFT = 64;
     static final int RIGHT = 128;
 
-    static final Path FILE = Path.of("saves", "keys.txt");
+    static Path keysFile() {
+        return SaveStore.root.resolve("keys.txt");
+    }
 
     private final Map<Integer, Integer> map = new LinkedHashMap<>();
     private Path file;
@@ -44,13 +46,14 @@ public final class KeyBindings {
 
     static KeyBindings load() {
         KeyBindings k = defaults();
-        k.file = FILE;
-        if (!Files.isRegularFile(FILE)) {
+        Path file = keysFile();
+        k.file = file;
+        if (!Files.isRegularFile(file)) {
             return k;
         }
         try {
             Map<Integer, Integer> loaded = new LinkedHashMap<>();
-            for (String line : Files.readAllLines(FILE)) {
+            for (String line : Files.readAllLines(file)) {
                 String t = line.trim();
                 if (t.isEmpty() || t.startsWith("#")) {
                     continue;
@@ -81,13 +84,13 @@ public final class KeyBindings {
             return;
         }
         try {
-            Files.createDirectories(FILE.getParent());
+            Files.createDirectories(file.getParent());
             List<String> lines = new ArrayList<>();
             lines.add("# keyCode=padBit  A=1 B=2 Select=4 Start=8 Up=16 Down=32 Left=64 Right=128");
             for (Map.Entry<Integer, Integer> e : map.entrySet()) {
                 lines.add(e.getKey() + "=" + e.getValue());
             }
-            Files.write(FILE, lines);
+            Files.write(file, lines);
         } catch (IOException e) {
             System.err.println("无法保存按键绑定：" + e.getMessage());
         }

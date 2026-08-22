@@ -38,6 +38,7 @@ public final class Main {
     private Main() {}
 
     public static void main(String[] args) throws Exception {
+        SaveStore.bindAppDir();
         Path rom = args.length > 0 ? Path.of(args[0]) : pickRom(null);
         if (rom == null) {
             return;

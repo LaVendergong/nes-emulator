@@ -25,6 +25,15 @@ final class SaveStore {
 
     private SaveStore() {}
 
+    /** jpackage 启动时工作目录不可靠，存档跟 exe 放一起。 */
+    static void bindAppDir() {
+        String launcher = System.getProperty("jpackage.app-path");
+        if (launcher == null || launcher.isBlank()) {
+            return;
+        }
+        root = Path.of(launcher).toAbsolutePath().getParent().resolve("saves");
+    }
+
     static int slotLimit() {
         Path file = root.resolve("slot-limit.txt");
         if (!Files.isRegularFile(file)) {

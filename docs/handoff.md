@@ -29,6 +29,7 @@ Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选
 - 手柄键表在 Host（`saves/keys.txt`）。O/P/空格/R/F5/Esc 不能绑 NES。
 - 会话控制不是 ROM 管理器。ROM 用户自备；仓库不收商业 ROM。测试盘：`roms/nova.nes`。
 - GitHub：https://github.com/LaVendergong/nes-emulator
+- Windows 便携包：JDK `jpackage` 打 `dist/FC-NES/FC-NES.exe`（脚本 `scripts/package-win.ps1`）。产物不上仓库。
 
 ## 仍开放
 
@@ -41,6 +42,7 @@ Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选
 mvn -q compile
 java -cp target/classes nes.selfcheck.SelfCheck
 java -cp target/classes nes.host.Main roms\nova.nes
+powershell -File scripts/package-win.ps1
 ```
 
 手柄：默认可换绑（Z=A，X=B，Shift/A=Select，Enter=Start，方向键）。菜单「切换按键...」。
