@@ -1,19 +1,21 @@
 package nes.apu;
 
 /**
- * NTSC APU：方波×2、三角、噪声、DMC。
+ * APU：方波×2、三角、噪声、DMC。NTSC/PAL 帧拍与 DMC/噪声表不同。
  * 不碰声卡；每个 CPU cycle 推进一次，按 44100 Hz 产出采样。
  * DMC 取样通过 Console 注入的读回调，不依赖 cart。
  */
 public final class Apu {
     public static final int SAMPLE_RATE = 44100;
-    private static final int CPU_HZ = 1_789_773;
     private static final int[] LENGTH = {
         10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
         12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30
     };
-    private static final int[] NOISE_PERIOD = {
+    private static final int[] NOISE_NTSC = {
         4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
+    };
+    private static final int[] NOISE_PAL = {
+        4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778
     };
     private static final int[][] DUTY = {
         {0, 0, 0, 0, 0, 0, 0, 1},
@@ -22,8 +24,11 @@ public final class Apu {
         {1, 1, 1, 1, 1, 1, 0, 0}
     };
 
-    private static final int[] DMC_RATE = {
+    private static final int[] DMC_NTSC = {
             428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54
+    };
+    private static final int[] DMC_PAL = {
+            398, 354, 316, 298, 276, 236, 210, 198, 176, 148, 132, 118, 98, 78, 66, 50
     };
 
     private final Pulse pulse1 = new Pulse(true);
@@ -39,6 +44,19 @@ public final class Apu {
     private boolean irqInhibit;
     private boolean frameIrq;
     private boolean oddCycle;
+    private int expPulse;
+    private int expPcm;
+    private final boolean pal;
+    private final int cpuHz;
+
+    public Apu() {
+        this(0);
+    }
+
+    public Apu(int tv) {
+        this.pal = tv == 1;
+        this.cpuHz = tv == 1 ? 1_662_607 : tv == 3 ? 1_773_447 : 1_789_773;
+    }
 
     public void reset() {
         pulse1.reset();
@@ -136,6 +154,12 @@ public final class Apu {
         dmc.reader = reader;
     }
 
+    /** cart 扩展声道。每个 CPU cycle 由 Console 注入。 */
+    public void setExpansion(int pulse, int pcm) {
+        expPulse = pulse;
+        expPcm = pcm;
+    }
+
     public int takeDmcStall() {
         int n = dmc.stall;
         dmc.stall = 0;
@@ -153,8 +177,8 @@ public final class Apu {
         dmc.tick();
         clockFrame();
         samplePhase += SAMPLE_RATE;
-        if (samplePhase >= CPU_HZ) {
-            samplePhase -= CPU_HZ;
+        if (samplePhase >= cpuHz) {
+            samplePhase -= cpuHz;
             if (bufferSize < buffer.length) {
                 buffer[bufferSize++] = (short) mix();
             }
@@ -210,34 +234,40 @@ public final class Apu {
 
     private void clockFrame() {
         frameCycle++;
+        int a = pal ? 8313 : 7457;
+        int b = pal ? 16627 : 14913;
+        int c = pal ? 24939 : 22371;
+        int d = pal ? 33252 : 29829;
+        int wrap4 = pal ? 33253 : 29830;
+        int wrap5 = pal ? 41565 : 37282;
         if (!fiveStep) {
-            if (frameCycle == 7457) {
+            if (frameCycle == a) {
                 quarter();
-            } else if (frameCycle == 14913) {
+            } else if (frameCycle == b) {
                 quarter();
                 half();
-            } else if (frameCycle == 22371) {
+            } else if (frameCycle == c) {
                 quarter();
-            } else if (frameCycle == 29829) {
+            } else if (frameCycle == d) {
                 quarter();
                 half();
                 if (!irqInhibit) {
                     frameIrq = true;
                 }
-            } else if (frameCycle >= 29830) {
+            } else if (frameCycle >= wrap4) {
                 frameCycle = 0;
             }
-        } else if (frameCycle == 7457) {
+        } else if (frameCycle == a) {
             quarter();
-        } else if (frameCycle == 14913) {
-            quarter();
-            half();
-        } else if (frameCycle == 22371) {
-            quarter();
-        } else if (frameCycle == 29829) {
+        } else if (frameCycle == b) {
             quarter();
             half();
-        } else if (frameCycle >= 37282) {
+        } else if (frameCycle == c) {
+            quarter();
+        } else if (frameCycle == d) {
+            quarter();
+            half();
+        } else if (frameCycle >= wrap5) {
             frameCycle = 0;
         }
     }
@@ -259,11 +289,11 @@ public final class Apu {
     }
 
     private int mix() {
-        int p = pulse1.output() + pulse2.output();
+        int p = pulse1.output() + pulse2.output() + expPulse;
         int t = triangle.output();
         int n = noise.output();
         double pulseOut = p == 0 ? 0 : 95.88 / (8128.0 / p + 100);
-        double tnd = t / 8227.0 + n / 12241.0 + dmc.output / 22638.0;
+        double tnd = t / 8227.0 + n / 12241.0 + (dmc.output + expPcm) / 22638.0;
         double tndOut = tnd == 0 ? 0 : 159.79 / (1.0 / tnd + 100);
         return (int) ((pulseOut + tndOut) * 30000);
     }
@@ -302,6 +332,10 @@ public final class Apu {
         }
 
         int volume() {
+            // ponytail: start 未进 quarter 时也出 15。天花板：比硬件最多早 1/240s。升级：只在 clock 时装 15。
+            if (!constant && start) {
+                return 15;
+            }
             return constant ? period : decay;
         }
 
@@ -403,14 +437,13 @@ public final class Apu {
         }
 
         void clockSweep() {
-            if (sweepReload) {
+            boolean due = sweepDivider == 0;
+            if (due && sweepEnable && sweepShift > 0 && !sweepMute()) {
+                period = sweepTarget() & 0x7FF;
+            }
+            if (due || sweepReload) {
                 sweepDivider = sweepPeriod;
                 sweepReload = false;
-            } else if (sweepDivider == 0) {
-                sweepDivider = sweepPeriod;
-                if (sweepEnable && sweepShift > 0 && !sweepMute()) {
-                    period = sweepTarget() & 0x7FF;
-                }
             } else {
                 sweepDivider--;
             }
@@ -503,6 +536,8 @@ public final class Apu {
                 length = LENGTH[(value >> 3) & 0x1F];
             }
             reloadFlag = true;
+            // ponytail: $400B 立刻装 linear。天花板：与 quarter 对齐最多差 1/240s。升级：只置 reloadFlag。
+            linear = reload;
         }
 
         void setEnabled(boolean on) {
@@ -575,7 +610,7 @@ public final class Apu {
         }
     }
 
-    private static final class Noise {
+    private final class Noise {
         final Envelope envelope = new Envelope();
         boolean enabled;
         boolean halt;
@@ -617,7 +652,7 @@ public final class Apu {
 
         void clockTimer() {
             if (timer == 0) {
-                timer = NOISE_PERIOD[periodIndex];
+                timer = (pal ? NOISE_PAL : NOISE_NTSC)[periodIndex];
                 int bit = shortMode ? 6 : 1;
                 int feedback = (lfsr & 1) ^ ((lfsr >> bit) & 1);
                 lfsr = (lfsr >> 1) | (feedback << 14);
@@ -662,7 +697,7 @@ public final class Apu {
         }
     }
 
-    private static final class Dmc {
+    private final class Dmc {
         java.util.function.IntUnaryOperator reader;
         boolean irqEnable;
         boolean loop;
@@ -732,7 +767,7 @@ public final class Apu {
             if (timer > 0) {
                 timer--;
             } else {
-                timer = DMC_RATE[rateIndex] - 1;
+                timer = (pal ? DMC_PAL : DMC_NTSC)[rateIndex] - 1;
                 clockBit();
             }
             if (!bufferFull && length > 0) {

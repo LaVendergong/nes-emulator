@@ -69,7 +69,7 @@ public final class Bus implements CpuMemory {
         if (address == 0x4017) {
             return 0x40;
         }
-        if (address >= 0x6000) {
+        if (address >= 0x4020) {
             return cart.cpuRead(address);
         }
         return 0;
@@ -105,7 +105,7 @@ public final class Bus implements CpuMemory {
             apu.write(address, value);
             return;
         }
-        if (address >= 0x6000) {
+        if (address >= 0x4020) {
             cart.cpuWrite(address, value);
         }
     }

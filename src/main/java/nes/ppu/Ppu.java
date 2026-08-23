@@ -3,13 +3,14 @@ package nes.ppu;
 import nes.cart.Cartridge;
 
 /**
- * NTSC PPU：按 dot 推进，产出 256×240。本切片背景 + 精灵，足够 NROM 出第一帧。
+ * PPU：按 dot 推进，产出 256×240。NTSC 262 线；PAL/Dendy 312 线。
  */
 public final class Ppu {
     public static final int WIDTH = 256;
     public static final int HEIGHT = 240;
 
     private final Cartridge cart;
+    private final boolean wide;
     private final int[] pixels = new int[WIDTH * HEIGHT];
     private final int[] nametable = new int[0x800];
     private final int[] palette = new int[32];
@@ -29,9 +30,31 @@ public final class Ppu {
     private boolean nmiLine;
     private boolean frameReady;
     private long dots;
+    private int bgNt;
+    private int bgAt;
+    private int bgLo;
+    private int bgHi;
+    private int bgShiftLo;
+    private int bgShiftHi;
+    private int atShiftLo;
+    private int atShiftHi;
+    private boolean a12High;
+    private final int[] sprX = new int[8];
+    private final int[] sprAttr = new int[8];
+    private final int[] sprTile = new int[8];
+    private final int[] sprRow = new int[8];
+    private final int[] sprLo = new int[8];
+    private final int[] sprHi = new int[8];
+    private final boolean[] sprZero = new boolean[8];
+    private int sprCount;
 
     public Ppu(Cartridge cart) {
+        this(cart, false);
+    }
+
+    public Ppu(Cartridge cart, boolean wide) {
         this.cart = cart;
+        this.wide = wide;
     }
 
     public void reset() {
@@ -48,12 +71,40 @@ public final class Ppu {
         dot = 0;
         nmiLine = false;
         frameReady = false;
+        bgNt = 0;
+        bgAt = 0;
+        bgLo = 0;
+        bgHi = 0;
+        bgShiftLo = 0;
+        bgShiftHi = 0;
+        atShiftLo = 0;
+        atShiftHi = 0;
+        a12High = false;
+        sprCount = 0;
     }
 
     public void tick() {
+        if (dot == 0) {
+            cart.onPpuScanline(scanline, rendering());
+        }
+        if (dot == 257) {
+            cart.setChrSpriteWindow(true);
+        } else if (dot == 321) {
+            cart.setChrSpriteWindow(false);
+        }
         if (scanline < 240 && dot >= 1 && dot <= 256) {
             plot(dot - 1, scanline);
         }
+        if (rendering() && (scanline < 240 || scanline == preRender())) {
+            clockBg();
+            if (dot >= 257 && dot <= 320) {
+                if (dot == 257) {
+                    evaluateSprites(scanline == preRender() ? 0 : scanline + 1);
+                }
+                fetchSprite((dot - 257) / 8, (dot - 257) & 7);
+            }
+        }
+        cart.onPpuA12(a12High);
         if (scanline == 241 && dot == 1) {
             status |= 0x80;
             if ((ctrl & 0x80) != 0) {
@@ -61,11 +112,11 @@ public final class Ppu {
             }
             frameReady = true;
         }
-        if (scanline == 261 && dot == 1) {
+        if (scanline == preRender() && dot == 1) {
             status &= ~0xE0;
             nmiLine = false;
         }
-        if (rendering() && scanline == 261 && dot >= 280 && dot <= 304) {
+        if (rendering() && scanline == preRender() && dot >= 280 && dot <= 304) {
             v = (v & ~0x7BE0) | (t & 0x7BE0);
         }
         dot++;
@@ -73,7 +124,7 @@ public final class Ppu {
         if (dot > 340) {
             dot = 0;
             scanline++;
-            if (scanline > 261) {
+            if (scanline > preRender()) {
                 scanline = 0;
             }
         }
@@ -254,7 +305,7 @@ public final class Ppu {
     private void plot(int x, int y) {
         int bg = 0;
         if ((mask & 0x08) != 0 && (x >= 8 || (mask & 0x02) != 0)) {
-            bg = backgroundPixel(x, y);
+            bg = backgroundPixel();
         }
         int sprite = 0;
         boolean spritePri = true;
@@ -289,85 +340,204 @@ public final class Ppu {
         pixels[y * WIDTH + x] = NES_RGB[color];
     }
 
-    private int backgroundPixel(int x, int y) {
-        // ponytail: 用 t+fineX 算像素，不走移位寄存器。天花板：帧中途 $2006 改 v 的卷轴。升级：loopy 按 dot 递增 + 移位器。
-        int scrollX = ((t & 0x1F) << 3) | fineX;
-        int scrollY = (((t >> 5) & 0x1F) << 3) | ((t >> 12) & 7);
-        int nt = (t >> 10) & 3;
-        int rx = scrollX + x;
-        int ry = scrollY + y;
-        int ntx = (nt & 1) ^ ((rx >> 8) & 1);
-        int nty = nt & 2;
-        if (ry >= 240) {
-            ry -= 240;
-            nty ^= 2;
+    private void clockBg() {
+        if ((dot >= 1 && dot <= 256) || (dot >= 321 && dot <= 336)) {
+            int phase = (dot - 1) & 7;
+            if (phase == 0) {
+                bgNt = fetchNt();
+            } else if (phase == 2) {
+                bgAt = fetchAt();
+            } else if (phase == 4) {
+                bgLo = fetchPt(0);
+            } else if (phase == 6) {
+                bgHi = fetchPt(8);
+            }
+            shiftBg();
+            if (phase == 7) {
+                loadBgShifters();
+                incrementX();
+            }
         }
-        int tileX = (rx >> 3) & 31;
-        int tileY = (ry >> 3) & 31;
-        int finePx = rx & 7;
-        int finePy = ry & 7;
-        int base = 0x2000 | (ntx * 0x400) | (nty * 0x400);
-        int tile = ppuRead(base + tileY * 32 + tileX);
-        int attr = ppuRead(base + 0x3C0 + (tileY / 4) * 8 + (tileX / 4));
-        int shift = (tileX & 2) | ((tileY & 2) << 1);
-        int pal = (attr >> shift) & 3;
-        int pattern = ((ctrl & 0x10) != 0 ? 0x1000 : 0) + tile * 16 + finePy;
-        int lo = ppuRead(pattern);
-        int hi = ppuRead(pattern + 8);
-        int bit = 7 - finePx;
-        int pix = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1);
+        if (dot == 256) {
+            incrementY();
+        }
+        if (dot == 257) {
+            v = (v & ~0x041F) | (t & 0x041F);
+        }
+    }
+
+    private int fetchNt() {
+        cart.setPpuCoarseX(v & 0x1F);
+        return ppuRead(0x2000 | (v & 0x0FFF));
+    }
+
+    private int fetchAt() {
+        int addr = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
+        int attr = ppuRead(addr);
+        if ((v & 0x40) != 0) {
+            attr >>= 4;
+        }
+        if ((v & 0x02) != 0) {
+            attr >>= 2;
+        }
+        return attr & 3;
+    }
+
+    private int fetchPt(int offset) {
+        int fineY = (v >> 12) & 7;
+        int table = (ctrl & 0x10) != 0 ? 0x1000 : 0;
+        return ppuRead(table + bgNt * 16 + fineY + offset);
+    }
+
+    private void shiftBg() {
+        bgShiftLo = (bgShiftLo << 1) & 0xFFFF;
+        bgShiftHi = (bgShiftHi << 1) & 0xFFFF;
+        atShiftLo = (atShiftLo << 1) & 0xFFFF;
+        atShiftHi = (atShiftHi << 1) & 0xFFFF;
+    }
+
+    private void loadBgShifters() {
+        bgShiftLo = (bgShiftLo & 0xFF00) | bgLo;
+        bgShiftHi = (bgShiftHi & 0xFF00) | bgHi;
+        int at0 = (bgAt & 1) != 0 ? 0xFF : 0;
+        int at1 = (bgAt & 2) != 0 ? 0xFF : 0;
+        atShiftLo = (atShiftLo & 0xFF00) | at0;
+        atShiftHi = (atShiftHi & 0xFF00) | at1;
+    }
+
+    private void incrementX() {
+        if ((v & 0x001F) == 31) {
+            v &= ~0x001F;
+            v ^= 0x0400;
+        } else {
+            v++;
+        }
+    }
+
+    private void incrementY() {
+        if ((v & 0x7000) != 0x7000) {
+            v += 0x1000;
+            return;
+        }
+        v &= ~0x7000;
+        int y = (v & 0x03E0) >> 5;
+        if (y == 29) {
+            y = 0;
+            v ^= 0x0800;
+        } else if (y == 31) {
+            y = 0;
+        } else {
+            y++;
+        }
+        v = (v & ~0x03E0) | (y << 5);
+    }
+
+    private int backgroundPixel() {
+        int bit = 15 - fineX;
+        int pix = ((bgShiftLo >> bit) & 1) | (((bgShiftHi >> bit) & 1) << 1);
         if (pix == 0) {
             return 0;
         }
+        int pal = ((atShiftLo >> bit) & 1) | (((atShiftHi >> bit) & 1) << 1);
         return (pal << 2) | pix;
     }
 
-    private int spritePixel(int x, int y) {
+    /**
+     * 满 8 个后继续看 OAM[n*4+m]；miss 时 n 与 m 一起加（硬件溢出 bug）。
+     * ponytail: 一次扫完，不按点评估。天花板：时序测试盘。升级：dots 65–256 逐步评估。
+     */
+    private void evaluateSprites(int y) {
         int height = (ctrl & 0x20) != 0 ? 16 : 8;
-        int result = 0;
-        for (int i = 0; i < 64; i++) {
-            int sy = oam[i * 4];
+        int found = 0;
+        int n = 0;
+        while (n < 64 && found < 8) {
+            int sy = oam[n * 4];
             int row = y - (sy + 1);
-            if (row < 0 || row >= height) {
-                continue;
+            if (row >= 0 && row < height) {
+                int attr = oam[n * 4 + 2];
+                if ((attr & 0x80) != 0) {
+                    row = height - 1 - row;
+                }
+                sprX[found] = oam[n * 4 + 3];
+                sprAttr[found] = attr;
+                sprTile[found] = oam[n * 4 + 1];
+                sprRow[found] = row;
+                sprZero[found] = n == 0;
+                found++;
             }
-            int tile = oam[i * 4 + 1];
-            int attr = oam[i * 4 + 2];
-            int sx = oam[i * 4 + 3];
-            int col = x - sx;
+            n++;
+        }
+        int m = 0;
+        while (n < 64) {
+            int sy = oam[(n * 4 + m) & 0xFF];
+            int row = y - (sy + 1);
+            if (row >= 0 && row < height) {
+                status |= 0x20;
+                break;
+            }
+            n++;
+            m = (m + 1) & 3;
+        }
+        for (int i = found; i < 8; i++) {
+            sprX[i] = 0;
+            sprAttr[i] = 0;
+            sprTile[i] = 0xFF;
+            sprRow[i] = 0;
+            sprZero[i] = false;
+            sprLo[i] = 0;
+            sprHi[i] = 0;
+        }
+        sprCount = found;
+    }
+
+    private void fetchSprite(int slot, int phase) {
+        if (phase == 0 || phase == 2) {
+            ppuRead(0x2000);
+            return;
+        }
+        if (phase == 4) {
+            sprLo[slot] = ppuRead(spritePatternAddr(slot, 0));
+        } else if (phase == 6) {
+            sprHi[slot] = ppuRead(spritePatternAddr(slot, 8));
+        }
+    }
+
+    private int spritePatternAddr(int slot, int plane) {
+        int tile = sprTile[slot];
+        int row = sprRow[slot];
+        if ((ctrl & 0x20) != 0) {
+            int bank = (tile & 1) << 12;
+            int tn = tile & 0xFE;
+            if (row >= 8) {
+                tn++;
+                row -= 8;
+            }
+            return bank + tn * 16 + row + plane;
+        }
+        int table = (ctrl & 0x08) != 0 ? 0x1000 : 0;
+        return table + tile * 16 + row + plane;
+    }
+
+    private int spritePixel(int x, int y) {
+        int result = 0;
+        for (int i = 0; i < sprCount; i++) {
+            int col = x - sprX[i];
             if (col < 0 || col > 7) {
                 continue;
             }
-            if ((attr & 0x80) != 0) {
-                row = height - 1 - row;
-            }
-            if ((attr & 0x40) != 0) {
+            if ((sprAttr[i] & 0x40) != 0) {
                 col = 7 - col;
             }
-            int pattern;
-            if (height == 16) {
-                int bank = (tile & 1) << 12;
-                int tn = tile & 0xFE;
-                if (row >= 8) {
-                    tn++;
-                    row -= 8;
-                }
-                pattern = bank + tn * 16 + row;
-            } else {
-                pattern = ((ctrl & 0x08) != 0 ? 0x1000 : 0) + tile * 16 + row;
-            }
-            int lo = ppuRead(pattern);
-            int hi = ppuRead(pattern + 8);
             int bit = 7 - col;
-            int pix = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1);
+            int pix = ((sprLo[i] >> bit) & 1) | (((sprHi[i] >> bit) & 1) << 1);
             if (pix == 0) {
                 continue;
             }
-            result = ((attr & 3) << 2) | pix;
-            if ((attr & 0x20) != 0) {
+            result = ((sprAttr[i] & 3) << 2) | pix;
+            if ((sprAttr[i] & 0x20) != 0) {
                 result |= 0x10;
             }
-            if (i == 0) {
+            if (sprZero[i]) {
                 result |= 0x20;
             }
             break;
@@ -377,10 +547,15 @@ public final class Ppu {
 
     private int ppuRead(int address) {
         address &= 0x3FFF;
+        a12High = (address & 0x1000) != 0;
         if (address < 0x2000) {
             return cart.ppuRead(address);
         }
         if (address < 0x3F00) {
+            int ext = cart.nametableRead(address);
+            if (ext >= 0) {
+                return ext;
+            }
             return nametable[mirrorNt(address)];
         }
         return palette[mirrorPalette(address)];
@@ -389,15 +564,23 @@ public final class Ppu {
     private void ppuWrite(int address, int value) {
         address &= 0x3FFF;
         value &= 0xFF;
+        a12High = (address & 0x1000) != 0;
         if (address < 0x2000) {
             cart.ppuWrite(address, value);
             return;
         }
         if (address < 0x3F00) {
+            if (cart.nametableWrite(address, value)) {
+                return;
+            }
             nametable[mirrorNt(address)] = value;
             return;
         }
         palette[mirrorPalette(address)] = value;
+    }
+
+    private int preRender() {
+        return wide ? 311 : 261;
     }
 
     private int mirrorNt(int address) {

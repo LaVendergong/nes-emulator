@@ -17,11 +17,14 @@ public final class Console {
     private final Apu apu;
     private final Bus bus;
     private final Cpu cpu;
+    private final int tv;
+    private int palStep;
 
     public Console(byte[] ines) {
+        this.tv = InesRom.tvSystem(ines);
         this.cart = InesRom.load(ines);
-        this.ppu = new Ppu(cart);
-        this.apu = new Apu();
+        this.ppu = new Ppu(cart, tv != InesRom.TV_NTSC);
+        this.apu = new Apu(tv);
         this.bus = new Bus(cart, ppu, apu);
         this.apu.setDmcRead(addr -> this.bus.read(addr));
         this.cpu = new Cpu(bus);
@@ -127,14 +130,23 @@ public final class Console {
 
     private void tickCpuCycle() {
         cart.clockCpu();
-        ppu.tick();
-        ppu.tick();
-        ppu.tick();
+        int dots = 3;
+        if (tv == InesRom.TV_PAL) {
+            palStep++;
+            if (palStep == 5) {
+                dots = 4;
+                palStep = 0;
+            }
+        }
+        for (int i = 0; i < dots; i++) {
+            ppu.tick();
+        }
+        apu.setExpansion(cart.expansionPulse(), cart.expansionPcm());
         apu.tick();
         cpu.stall(apu.takeDmcStall());
         if (ppu.pullNmi()) {
             cpu.nmi();
         }
-        cpu.irq(apu.irqAsserted());
+        cpu.irq(apu.irqAsserted() || cart.irqAsserted());
     }
 }

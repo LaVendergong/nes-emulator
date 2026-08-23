@@ -25,6 +25,8 @@ public final class Cpu {
     private int stall;
     private long cycles;
     private int pageCross;
+    private int dataBus;
+    private int floatBus;
 
     public Cpu(CpuMemory bus) {
         this.bus = bus;
@@ -98,7 +100,9 @@ public final class Cpu {
         if (irq && (p & I) == 0) {
             return interrupt(0xFFFE, false);
         }
+        int leftover = dataBus;
         int op = fetch();
+        floatBus = leftover;
         int used = execute(op);
         cycles += used;
         return used;
@@ -829,13 +833,33 @@ public final class Cpu {
                 sax(zp());
                 return 3;
             }
+            case 0x8B -> {
+                xaa(read(imm()));
+                return 2;
+            }
             case 0x8F -> {
                 sax(abs_());
                 return 4;
             }
+            case 0x93 -> {
+                shaIzy();
+                return 6;
+            }
             case 0x97 -> {
                 sax(zpy());
                 return 4;
+            }
+            case 0x9C -> {
+                shyAbsX();
+                return 5;
+            }
+            case 0x9E -> {
+                shxAbsY();
+                return 5;
+            }
+            case 0x9F -> {
+                shaAbsY();
+                return 5;
             }
             case 0xA3 -> {
                 lax(izx());
@@ -855,6 +879,9 @@ public final class Cpu {
             case 0xB7 -> {
                 lax(zpy());
                 return 4;
+            }
+            case 0xBB -> {
+                return 4 + lasAbY();
             }
             case 0xBF -> {
                 return 4 + laxAbY();
@@ -1168,6 +1195,40 @@ public final class Cpu {
         write(addr, a & x);
     }
 
+    /** 2A03：上条指令总线残留，bit0/bit4 易掉（& $EE）。 */
+    private void xaa(int v) {
+        a = (a | (floatBus & 0xEE)) & x & v;
+        zn(a);
+    }
+
+    private void shaAbsY() {
+        int base = abs_();
+        write((base + y) & 0xFFFF, a & x & (((base >> 8) + 1) & 0xFF));
+    }
+
+    private void shaIzy() {
+        int ptr = fetch();
+        int base = read(ptr) | (read((ptr + 1) & 0xFF) << 8);
+        write((base + y) & 0xFFFF, a & x & (((base >> 8) + 1) & 0xFF));
+    }
+
+    private void shyAbsX() {
+        int base = abs_();
+        write((base + x) & 0xFFFF, y & (((base >> 8) + 1) & 0xFF));
+    }
+
+    private void shxAbsY() {
+        int base = abs_();
+        write((base + y) & 0xFFFF, x & (((base >> 8) + 1) & 0xFF));
+    }
+
+    private int lasAbY() {
+        int v = read(aby()) & sp;
+        a = x = sp = v;
+        zn(a);
+        return pageCross;
+    }
+
     private void slo(int addr) {
         int v = aslVal(read(addr));
         write(addr, v);
@@ -1381,11 +1442,15 @@ public final class Cpu {
     }
 
     private int read(int addr) {
-        return bus.read(addr & 0xFFFF);
+        int v = bus.read(addr & 0xFFFF);
+        dataBus = v;
+        return v;
     }
 
     private void write(int addr, int value) {
-        bus.write(addr & 0xFFFF, value & 0xFF);
+        value &= 0xFF;
+        bus.write(addr & 0xFFFF, value);
+        dataBus = value;
     }
 
     private int read16(int addr) {

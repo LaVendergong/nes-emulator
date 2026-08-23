@@ -2,7 +2,7 @@
 
 这是本仓库给 AI 与人类的同一份操作手册。新会话先读本文，再读 `docs/project-map.md`。提示词原文在 `prompts/`。
 
-本仓库是 NTSC FC/NES 模拟器：Windows 与 Android 两个 Host，核相同。模块边界与不变量以地图为准。
+本仓库是 NTSC/PAL/Dendy FC/NES 模拟器：Windows 与 Android 两个 Host，核相同。模块边界与不变量以地图为准。
 
 ## 目标
 
