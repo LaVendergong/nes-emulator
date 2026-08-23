@@ -3,6 +3,7 @@ package nes.host;
 import nes.apu.Apu;
 import nes.console.Console;
 import nes.ppu.Ppu;
+import nes.save.SaveStore;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
@@ -225,6 +226,7 @@ public final class Main {
         SourceDataLine line = openLine();
         short[] samples = new short[2048];
         byte[] pcm = new byte[4096];
+        int maxQueued = Apu.SAMPLE_RATE / 10 * 2;
         long next = System.nanoTime();
         try {
             while (true) {
@@ -260,7 +262,7 @@ public final class Main {
                 image.setRGB(0, 0, Ppu.WIDTH, Ppu.HEIGHT, pix, 0, Ppu.WIDTH);
                 screen.repaint();
                 int n = console.drainSamples(samples);
-                writeAudio(line, samples, pcm, n);
+                writeAudio(line, samples, pcm, n, maxQueued);
                 // ponytail: 有声卡时用 write 阻塞限速（对齐 44100）。墙钟 60Hz 会比 NES 略慢，缓冲见底就卡一下。
                 if (line == null) {
                     next += FRAME_NS;
@@ -294,20 +296,32 @@ public final class Main {
         }
     }
 
-    private static void writeAudio(SourceDataLine line, short[] samples, byte[] pcm, int n) {
+    private static void writeAudio(SourceDataLine line, short[] samples, byte[] pcm, int n, int maxQueued) {
         if (line == null || n <= 0) {
             return;
         }
-        int bytes = n * 2;
-        if (bytes > pcm.length) {
-            n = pcm.length / 2;
-            bytes = n * 2;
+        if (line.getBufferSize() - line.available() > maxQueued) {
+            line.flush();
         }
-        for (int i = 0; i < n; i++) {
-            pcm[i * 2] = (byte) samples[i];
-            pcm[i * 2 + 1] = (byte) (samples[i] >> 8);
+        int off = 0;
+        while (off < n) {
+            int chunk = Math.min(n - off, pcm.length / 2);
+            for (int i = 0; i < chunk; i++) {
+                int s = samples[off + i];
+                pcm[i * 2] = (byte) s;
+                pcm[i * 2 + 1] = (byte) (s >> 8);
+            }
+            int bytes = chunk * 2;
+            int written = 0;
+            while (written < bytes) {
+                int w = line.write(pcm, written, bytes - written);
+                if (w <= 0) {
+                    return;
+                }
+                written += w;
+            }
+            off += chunk;
         }
-        line.write(pcm, 0, bytes);
     }
 
     private static Path pickRom(Component parent) {

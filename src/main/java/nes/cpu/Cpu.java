@@ -24,6 +24,7 @@ public final class Cpu {
     private boolean irq;
     private int stall;
     private long cycles;
+    private int pageCross;
 
     public Cpu(CpuMemory bus) {
         this.bus = bus;
@@ -1014,21 +1015,18 @@ public final class Cpu {
     }
 
     private int oraIzY() {
-        int[] r = izy();
-        ora(r[0]);
-        return r[1];
+        ora(izy());
+        return pageCross;
     }
 
     private int oraAbX() {
-        int[] r = abx();
-        ora(r[0]);
-        return r[1];
+        ora(abx());
+        return pageCross;
     }
 
     private int oraAbY() {
-        int[] r = aby();
-        ora(r[0]);
-        return r[1];
+        ora(aby());
+        return pageCross;
     }
 
     private void and(int addr) {
@@ -1037,21 +1035,18 @@ public final class Cpu {
     }
 
     private int andIzY() {
-        int[] r = izy();
-        and(r[0]);
-        return r[1];
+        and(izy());
+        return pageCross;
     }
 
     private int andAbX() {
-        int[] r = abx();
-        and(r[0]);
-        return r[1];
+        and(abx());
+        return pageCross;
     }
 
     private int andAbY() {
-        int[] r = aby();
-        and(r[0]);
-        return r[1];
+        and(aby());
+        return pageCross;
     }
 
     private void eor(int addr) {
@@ -1060,114 +1055,98 @@ public final class Cpu {
     }
 
     private int eorIzY() {
-        int[] r = izy();
-        eor(r[0]);
-        return r[1];
+        eor(izy());
+        return pageCross;
     }
 
     private int eorAbX() {
-        int[] r = abx();
-        eor(r[0]);
-        return r[1];
+        eor(abx());
+        return pageCross;
     }
 
     private int eorAbY() {
-        int[] r = aby();
-        eor(r[0]);
-        return r[1];
+        eor(aby());
+        return pageCross;
     }
 
     private int adcIzY() {
-        int[] r = izy();
-        adc(read(r[0]));
-        return r[1];
+        adc(read(izy()));
+        return pageCross;
     }
 
     private int adcAbX() {
-        int[] r = abx();
-        adc(read(r[0]));
-        return r[1];
+        adc(read(abx()));
+        return pageCross;
     }
 
     private int adcAbY() {
-        int[] r = aby();
-        adc(read(r[0]));
-        return r[1];
+        adc(read(aby()));
+        return pageCross;
     }
 
     private int sbcIzY() {
-        int[] r = izy();
-        sbc(read(r[0]));
-        return r[1];
+        sbc(read(izy()));
+        return pageCross;
     }
 
     private int sbcAbX() {
-        int[] r = abx();
-        sbc(read(r[0]));
-        return r[1];
+        sbc(read(abx()));
+        return pageCross;
     }
 
     private int sbcAbY() {
-        int[] r = aby();
-        sbc(read(r[0]));
-        return r[1];
+        sbc(read(aby()));
+        return pageCross;
     }
 
     private int ldaIzY() {
-        int[] r = izy();
-        a = read(r[0]);
+        a = read(izy());
         zn(a);
-        return r[1];
+        return pageCross;
     }
 
     private int ldaAbX() {
-        int[] r = abx();
-        a = read(r[0]);
+        a = read(abx());
         zn(a);
-        return r[1];
+        return pageCross;
     }
 
     private int ldaAbY() {
-        int[] r = aby();
-        a = read(r[0]);
+        a = read(aby());
         zn(a);
-        return r[1];
+        return pageCross;
     }
 
     private int ldxAbY() {
-        int[] r = aby();
-        x = read(r[0]);
+        x = read(aby());
         zn(x);
-        return r[1];
+        return pageCross;
     }
 
     private int ldyAbX() {
-        int[] r = abx();
-        y = read(r[0]);
+        y = read(abx());
         zn(y);
-        return r[1];
+        return pageCross;
     }
 
     private int cmpIzY() {
-        int[] r = izy();
-        cmp(a, read(r[0]));
-        return r[1];
+        cmp(a, read(izy()));
+        return pageCross;
     }
 
     private int cmpAbX() {
-        int[] r = abx();
-        cmp(a, read(r[0]));
-        return r[1];
+        cmp(a, read(abx()));
+        return pageCross;
     }
 
     private int cmpAbY() {
-        int[] r = aby();
-        cmp(a, read(r[0]));
-        return r[1];
+        cmp(a, read(aby()));
+        return pageCross;
     }
 
     private int nopAbX() {
-        return abx()[1];
+        abx();
+        return pageCross;
     }
 
     private void lax(int addr) {
@@ -1176,15 +1155,13 @@ public final class Cpu {
     }
 
     private int laxIzY() {
-        int[] r = izy();
-        lax(r[0]);
-        return r[1];
+        lax(izy());
+        return pageCross;
     }
 
     private int laxAbY() {
-        int[] r = aby();
-        lax(r[0]);
-        return r[1];
+        lax(aby());
+        return pageCross;
     }
 
     private void sax(int addr) {
@@ -1358,16 +1335,18 @@ public final class Cpu {
         return lo | (fetch() << 8);
     }
 
-    private int[] abx() {
+    private int abx() {
         int base = abs_();
         int addr = (base + x) & 0xFFFF;
-        return new int[] {addr, ((base ^ addr) & 0x100) != 0 ? 1 : 0};
+        pageCross = ((base ^ addr) & 0x100) != 0 ? 1 : 0;
+        return addr;
     }
 
-    private int[] aby() {
+    private int aby() {
         int base = abs_();
         int addr = (base + y) & 0xFFFF;
-        return new int[] {addr, ((base ^ addr) & 0x100) != 0 ? 1 : 0};
+        pageCross = ((base ^ addr) & 0x100) != 0 ? 1 : 0;
+        return addr;
     }
 
     private int abxWrite() {
@@ -1383,11 +1362,12 @@ public final class Cpu {
         return read(ptr) | (read((ptr + 1) & 0xFF) << 8);
     }
 
-    private int[] izy() {
+    private int izy() {
         int ptr = fetch();
         int base = read(ptr) | (read((ptr + 1) & 0xFF) << 8);
         int addr = (base + y) & 0xFFFF;
-        return new int[] {addr, ((base ^ addr) & 0x100) != 0 ? 1 : 0};
+        pageCross = ((base ^ addr) & 0x100) != 0 ? 1 : 0;
+        return addr;
     }
 
     private int izyWrite() {

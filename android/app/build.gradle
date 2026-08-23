@@ -1,0 +1,36 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "nes.android"
+    compileSdk 34
+    defaultConfig {
+        applicationId "nes.android"
+        minSdk 26
+        targetSdk 34
+        versionCode 2
+        versionName "0.3.0"
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets {
+        main {
+            java {
+                srcDir "../../src/main/java"
+                exclude "nes/host/**"
+                exclude "nes/selfcheck/**"
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+}

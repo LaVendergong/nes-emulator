@@ -1,5 +1,7 @@
 package nes.host;
 
+import nes.save.SaveStore;
+
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.nio.file.Files;

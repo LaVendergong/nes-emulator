@@ -1,6 +1,7 @@
 package nes.host;
 
 import nes.console.Console;
+import nes.save.SaveStore;
 
 /**
  * 一局会话：换盘/重启是 {@code new Console(ines)}，暂停只挡步进。

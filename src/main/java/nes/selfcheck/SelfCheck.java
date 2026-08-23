@@ -103,6 +103,23 @@ public final class SelfCheck {
         check(Math.abs(silence.length - expect) <= 1,
                 "采样数应跟 CPU cycle 对齐，期望约 " + expect + " 实际 " + silence.length);
 
+        Console split = new Console(nromBeep());
+        split.drainSamples();
+        for (int i = 0; i < 8; i++) {
+            split.stepFrame();
+        }
+        short[] all = split.drainSamples();
+        Console part = new Console(nromBeep());
+        part.drainSamples();
+        for (int i = 0; i < 8; i++) {
+            part.stepFrame();
+        }
+        short[] head = new short[10];
+        int took = part.drainSamples(head);
+        short[] tail = part.drainSamples();
+        check(took == 10 && took + tail.length == all.length, "drainTo 装不下应留下剩余采样");
+        check(head[0] == all[0] && tail[0] == all[10], "留下的采样应接在已拷走的后面");
+
         Console beep = new Console(nromBeep());
         beep.drainSamples();
         for (int i = 0; i < 4; i++) {

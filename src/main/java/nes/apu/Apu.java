@@ -167,11 +167,15 @@ public final class Apu {
         return out;
     }
 
-    /** 拷进调用方缓冲，热路径不分配。 */
+    /** 拷进调用方缓冲，热路径不分配。装不下的留在队头，不丢。 */
     public int drainTo(short[] dest) {
         int n = Math.min(bufferSize, dest.length);
         System.arraycopy(buffer, 0, dest, 0, n);
-        bufferSize = 0;
+        int left = bufferSize - n;
+        if (left > 0) {
+            System.arraycopy(buffer, n, buffer, 0, left);
+        }
+        bufferSize = left;
         return n;
     }
 

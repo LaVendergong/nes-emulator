@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>nes</groupId>
     <artifactId>emulator</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <name>模拟器</name>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

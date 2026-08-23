@@ -2,39 +2,40 @@
 
 ## 当前状态
 
-Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选盘、换盘、暂停、重启、即时存档、按键换绑。
-本版（相对上一收尾）：mapper 2 UNROM、APU DMC、游戏常用非官方 6502、MMC1 连续周期写丢掉。存档魔数 NES1 **v2**。测试盘 `roms/nova.nes`（MMC1）能玩、有声。
+Windows 与 Android 两个 Host，同一份 NTSC 核。会话功能对齐：选盘、暂停、重启、存档槽、换绑。
+
+- 核：mapper 0 / 1（MMC1，连续写丢掉）/ 2（UNROM）；方波/三角/噪声/DMC；游戏常用非官方 6502。
+- Windows：选盘/换盘/暂停/重启/存档槽/换绑。存档 NES1 **v2**。便携包 `jpackage`。
+- Android：`android/` Gradle；打开 ROM（SAF）、暂停、重启、存档槽、拖虚拟键位置；锁横屏。不扫盘。槽位在应用私有 `saves/`。
+- 测试盘：`roms/nova.nes`。仓库：https://github.com/LaVendergong/nes-emulator
 
 ## 下一步唯一动作
 
-等用户用一句话点名下一刀（完成定义 + 改哪个模块），再按 `prompts/templates.md` 的 `03-implement` 或 `04-change` 做。在那之前不要加功能、不要重构。
+等用户一句话点名下一刀（完成定义 + 改哪个模块），再按 `prompts/templates.md` 的 `03-implement` 或 `04-change`。没点名不要加功能、不要重构。
+
+候选（空着不等于现在要做）：PPU loopy、其它 mapper、不稳定 6502。
 
 ## 必须先读（最多 5）
 
-1. `AGENTS.md` — 工作纪律。
-2. `docs/project-map.md` — 模块边界、不变量、禁止事项。
-3. `docs/adr/0001-java-stdlib-host.md` — Java 17 + 标准库，零运行时依赖。
-4. `docs/adr/0002-ntsc-cycle-clock.md` — 1 CPU cycle = 3 PPU dots，不用墙钟推 NES。
-5. `prompts/templates.md` — 对号入座后再动手。
+1. `AGENTS.md`
+2. `docs/project-map.md`
+3. `docs/adr/0001-java-stdlib-host.md` — Windows：Java 17 + 标准库
+4. `docs/adr/0002-ntsc-cycle-clock.md` — 1 CPU = 3 PPU dots，不按墙钟补步
+5. `docs/adr/0003-android-host.md` — Android 第二 Host，核仍是这份 Java
 
 ## 已锁定（不要重开）
 
-- 只做 NTSC 一台 NES。Host 只通过 `nes.console.Console`。
-- Java 17 + Maven，运行时零依赖。窗口 AWT/Java2D，音频 `javax.sound.sampled`。
-- Mapper 逻辑只在 `cart`。当前：0（NROM）、1（MMC1，连续 CPU cycle 写丢掉）、2（UNROM）。
-- APU 含 DMC；取样回调由 Console 注入，`apu` 不 import cart。
-- 有声卡时 Host 用 `SourceDataLine.write` 阻塞限速；热路径复用采样缓冲。
-- 换盘/重启是 `new Console(ines)`；暂停是 Host 不调用 `stepFrame`，不按墙钟补步。
-- 即时存档走 `console.saveState`/`loadState`。Host 不拆快照。文件在 `saves/`，不上仓库。
-- 手柄键表在 Host（`saves/keys.txt`）。O/P/空格/R/F5/Esc 不能绑 NES。
-- 会话控制不是 ROM 管理器。ROM 用户自备；仓库不收商业 ROM。测试盘：`roms/nova.nes`。
-- GitHub：https://github.com/LaVendergong/nes-emulator
-- Windows 便携包：JDK `jpackage` 打 `dist/FC-NES/FC-NES.exe`（脚本 `scripts/package-win.ps1`）。产物不上仓库。
+- 只做 NTSC 一台 NES。Host 只走 `nes.console.Console`。不抽 Emulator 接口。
+- 核与 Windows：Java 17 + Maven。Android：Gradle + 系统 View / AudioTrack / SAF。不引入 Flutter / iOS。
+- Mapper 只在 `cart`：0 / 1 / 2。`android/` 禁止解析 iNES。
+- 暂停 = Host 不调用 `stepFrame`；换盘/重启 = `new Console(ines)`。切后台也不补帧。
+- 即时存档走 `nes.save.SaveStore`（NES1 v2 快照外包 SLOT）。Windows 写工作目录/`exe` 旁；Android 写应用私有目录。不拆快照。
+- Android 只挪虚拟键位置（左右栏内），不改 NES bit，不画键盘。
+- 会话不是 ROM 管理器。仓库不收商业 ROM。
 
 ## 仍开放
 
-- 地图里空着的不等于现在要做：PPU loopy 移位器、其它 mapper、不稳定非官方 6502（SHA/SHX/SHY/XAA/LAS）。
-- 产品级「明确不做」用户写过「暂无」；工程围栏在地图「不做」。
+- PPU loopy 移位器、更多 mapper、SHA/SHX/SHY/XAA/LAS。
 
 ## 验证
 
@@ -42,41 +43,46 @@ Windows 上的 NTSC FC/NES 模拟器主路径已通。Host 有会话控制：选
 mvn -q compile
 java -cp target/classes nes.selfcheck.SelfCheck
 java -cp target/classes nes.host.Main roms\nova.nes
-powershell -File scripts/package-win.ps1
 ```
 
-手柄：默认可换绑（Z=A，X=B，Shift/A=Select，Enter=Start，方向键）。菜单「切换按键...」。
-会话：菜单「游戏」，或 O=打开/换盘，P/空格=暂停，R=重启，F5=存档槽（点有档槽继续）。
+Android：Studio Open `android/` → 开 AVD → Run。把 ROM 放进虚拟机后应用内「打开 ROM」：
+
+```
+adb push roms\nova.nes /sdcard/Download/
+```
 
 ## 踩过的坑
 
-- `nova.nes` 是 mapper 1、256KB PRG、CHR RAM，不是 NROM。
-- 16KB PRG 复位向量在文件偏移 `16+0x3FFC`，不是 `0x7FFC`。
-- 每帧 `new` 采样数组 + 墙钟 60.00Hz 睡眠会隔几秒卡一下；已改为复用缓冲 + 音频阻塞。
-- MMC1 连续周期写已丢掉（RMW dummy）。PPU 背景用 `t` 算像素，不是逐 dot loopy。
-- 不稳定非官方 6502（SHA/SHX/SHY/XAA/LAS）仍抛异常（带 PC）。
-- 旧即时存档 NES1 v1 不能读；DMC 进快照后升到 v2。
-- 暂停键要挡自动重复，否则 P 会长按连切。
+- `nova.nes` 是 mapper 1、CHR RAM，不是 NROM。16KB PRG 复位向量在文件偏移 `16+0x3FFC`。
+- 音频用 write 阻塞限速，不要每帧 `new` 采样数组 + 墙钟 60Hz 睡眠。
+- MMC1 连续周期写已丢掉。PPU 背景仍用 `t`，不是逐 dot loopy。
+- 不稳定非官方 6502 仍抛（带 PC）。NES1 v1 存档拒读。
+- Windows 暂停键要挡自动重复。
+- 仓库路径含「模拟器」：AGP 默认拒编。已设 `android.overridePathCheck=true`。aapt/ndk 若再因中文路径失败，把仓库挪到纯 ASCII 目录。
+- AVD 默认写在 `%USERPROFILE%\.android\avd`。C 盘不够时设用户变量 `ANDROID_AVD_HOME`（本机曾指到 `E:\Android\avd`），然后**整进程退出 Studio** 再建虚拟机。userdata 大约要 12GB。
+- Android Studio 必须 Open `android/`，不要 Open 仓库根。ROM 不会打进 APK，要自己推进虚拟机再选。
 
 ## 给下一会话的提示词
 
 ```
 先读 AGENTS.md 和 docs/project-map.md，需要时再读 docs/handoff.md 与 docs/adr/。
 
-这是 Windows 上的 NTSC FC/NES 模拟器。边界以地图为准。Host 只走 nes.console.Console。
+NTSC FC/NES。Host 只走 nes.console.Console。Windows 与 Android 两个 Host，核不改平台。
 
-当前能玩：mapper 0/1/2，方波/三角/噪声/DMC，游戏常用非官方 6502。Host 有选盘/换盘/暂停/重启/存档槽/换绑。
-测试 ROM：roms/nova.nes。仓库：https://github.com/LaVendergong/nes-emulator
-存档：NES1 v2（v1 拒读）。
+当前能玩：mapper 0/1/2，方波/三角/噪声/DMC，游戏常用非官方 6502。
+Windows：选盘/换盘/暂停/重启/存档槽/换绑。存档 NES1 v2。
+Android：选盘/暂停/重启/存档槽/拖虚拟键位置；锁横屏。工程在 android/。
+测试 ROM：roms/nova.nes。https://github.com/LaVendergong/nes-emulator
 
 动手前写四行：意图 / 改哪些不改哪些 / 风险 / 验证。
-一次只做一个意图。跨模块只走公开入口。不要顺手重构，不要为以后预留层。
-新依赖必须能说出「没有它 60 帧或窗口/音频做不到」。
+一次只做一个意图。跨模块只走公开入口。不要顺手重构。
+新依赖必须能说出「没有它 60 帧或当前 Host 窗口/音频做不到」。
 
-用户若没点名下一刀：不要自己加 DMC/mapper/PPU 重写。问一句完成定义再做。
-用户若点名了：套 prompts/templates.md 的 03-implement 或 04-change；修 bug 用 07-debug（先复现）。
+用户没点名下一刀：不要自己加 mapper/PPU 重写/Android 存档。问一句完成定义再做。
+用户点名了：03-implement 或 04-change；修 bug 用 07-debug（先复现）。
 
 改完更新地图被你碰过的那几行，并跑：
   mvn -q compile
   java -cp target/classes nes.selfcheck.SelfCheck
+Android 改动：Studio 打开 android/ 在 AVD 上再跑一遍主路径。
 ```
