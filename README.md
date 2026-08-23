@@ -5,7 +5,7 @@ NTSC / PAL / Dendy 一台机器。Windows 与 Android 两个 Host，核是同一
 - 手册：[`AGENTS.md`](AGENTS.md)
 - 模块与不变量：[`docs/project-map.md`](docs/project-map.md)
 - 下一会话从哪接：[`docs/handoff.md`](docs/handoff.md)
-- 发布：https://github.com/LaVendergong/nes-emulator/releases/tag/v0.3.0
+- 发布：https://github.com/LaVendergong/nes-emulator/releases/tag/v0.4.0
 
 ```
 mvn -q compile

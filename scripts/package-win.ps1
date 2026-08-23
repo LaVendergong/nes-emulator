@@ -28,7 +28,7 @@ jpackage `
     --name FC-NES `
     --app-version $version `
     --vendor LaVendergong `
-    --description "NTSC FC/NES emulator" `
+    --description "NTSC/PAL/Dendy FC/NES emulator" `
     --dest $dest `
     --input $in `
     --main-jar emulator.jar `

@@ -2,11 +2,11 @@
 
 ## 当前状态
 
-**v0.3.0 已发布**（Host / 会话收口）。其后核精度已往前推了一大截，**尚未打新版本号**。发布页仍是：https://github.com/LaVendergong/nes-emulator/releases/tag/v0.3.0
+**v0.4.0 已发布。** 核精度切片（常见 mapper、NTSC/PAL/Dendy、YM2413 72-slot）。Host 能力与 v0.3.0 对齐。发布页：https://github.com/LaVendergong/nes-emulator/releases/tag/v0.4.0
 
 同一份 Java 17 核，Windows 与 Android 两个 Host。Host 只走 `nes.console.Console`。
 
-### 核（v0.3.0 之后已合入工作树）
+### 核（v0.4.0）
 
 - 制式：`InesRom.tvSystem` → NTSC / PAL / Dendy。NTSC、Dendy：1 CPU = 3 PPU dots；PAL：5 CPU = 16 dots（3+3+3+3+4）。PAL/Dendy PPU 312 线。APU 采样：NTSC 1789773、PAL 1662607、Dendy 1773447。制式不进 NES1 快照。
 - Mapper（`InesRom` 接受）：0–11、13、19、21–26、34、66、69、71、73、75、79、85、87、140、180、206、210。未列出的（如 12）在 cart 边界拒绝。
@@ -16,9 +16,9 @@
 - four-screen：`FourScreenCart` 自带 4KB NT，不扩 PPU CIRAM（NES1 v2 长度不变）。MMC5 不包。
 - FFE 6/8：`$4501–$4503` CPU 周期 IRQ。
 
-### Host（v0.3.0，此后未改）
+### Host（相对 v0.3.0 未加功能）
 
-- Windows：`jpackage` 便携包 `fc-nes-0.3.0-windows.zip`。选盘/换盘/暂停/重启/存档槽/换绑。键表 `saves/keys.txt`。
+- Windows：`jpackage` 便携包 `fc-nes-0.4.0-windows.zip`。选盘/换盘/暂停/重启/存档槽/换绑。键表 `saves/keys.txt`。
 - Android：`android/` Gradle；锁横屏；SAF 选盘；存档走应用私有 `saves/`；虚拟键可拖，bit 固定。APK 为调试签名。
 - 槽位：`nes.save.SaveStore`，NES1 **v2**（v1 拒读）。两个 Host 共用。
 - 测试盘：`roms/nova.nes`（mapper 1 + CHR RAM）。仓库：https://github.com/LaVendergong/nes-emulator
@@ -27,7 +27,7 @@
 
 等用户一句话点名下一刀（完成定义 + 改哪个模块），再按 `prompts/templates.md` 的 `03-implement` 或 `04-change`。没点名不要加功能、不要重构、不要自己开 mapper/PPU。
 
-核精度这一段（常见 mapper、制式、YM2413 72-slot）已收口。下一刀由用户点名，例如：实机/测试盘对拍、打 v0.4.0、或某张具体盘的 bug。
+v0.4.0 已发出。下一刀由用户点名，例如：实机/测试盘对拍、某张具体盘的 bug。
 
 候选（空着 ≠ 现在要做）：iOS；Nuked 级 YM2413 18-slot 流水线；更偏门 mapper（VRC5、Namco 175 以外的冷门板）；正式 Android 签名。
 
@@ -56,7 +56,7 @@
 - iOS。
 - Nuked 级 YM2413 18-slot 流水线。
 - PAL 读档对齐 3+3+3+3+4 相位（需 NES1 v3）。
-- 正式 Android 签名；打 v0.4.0（核精度切片发版）。
+- 正式 Android 签名。
 
 ## 验证
 
@@ -96,7 +96,7 @@ adb push roms\nova.nes /sdcard/Download/
 
 NTSC/PAL/Dendy FC/NES。Host 只走 nes.console.Console。Windows 与 Android 两个 Host，核不改平台。
 
-v0.3.0 已发布（Host/会话）。其后核已含常见 mapper、制式、YM2413 72-slot、four-screen；尚未打 v0.4.0。
+v0.4.0 已发布。常见 mapper、NTSC/PAL/Dendy、YM2413 72-slot、four-screen。Host 能力与 v0.3.0 对齐。
 能玩：mapper 0–11、13、19、21–26、34、66、69、71、73、75、79、85、87、140、180、206、210；MMC5/VRC6/5B/N163/VRC7 扩声；FFE $450x IRQ。
 Windows：选盘/换盘/暂停/重启/存档槽/换绑。存档 NES1 v2。
 Android：选盘/暂停/重启/存档槽/拖虚拟键位置；锁横屏。工程在 android/。

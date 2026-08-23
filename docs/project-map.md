@@ -106,8 +106,8 @@ powershell -File scripts/package-win.ps1
 Android：Android Studio **Open** `android/`（不要开仓库根）。Device Manager 开 AVD 后 Run。核源码由 Gradle 编进 APK（排除 `nes.host` / `nes.selfcheck`）。ROM 用 SAF 选；可用 `adb push roms\nova.nes /sdcard/Download/`。
 Windows 路径含「模拟器」：`android/gradle.properties` 已开 `overridePathCheck`。AVD 默认在用户目录；C 盘不够设用户环境变量 `ANDROID_AVD_HOME` 到别的盘。
 
-当前发布 **v0.3.0**（Host/会话）：https://github.com/LaVendergong/nes-emulator/releases/tag/v0.3.0
-其后工作树已含制式与常见 mapper，**尚未打 v0.4.0**。Windows：解压 `dist/fc-nes-*-windows.zip`，双击 `FC-NES.exe`。存档写在 exe 旁的 `saves/`。Android APK 为调试签名。
+当前发布 **v0.4.0**：https://github.com/LaVendergong/nes-emulator/releases/tag/v0.4.0
+Windows：解压 `dist/fc-nes-*-windows.zip`，双击 `FC-NES.exe`。存档写在 exe 旁的 `saves/`。Android APK 为调试签名。
 
 当前切片：mapper 0–11、13、19、21–26、34、66、69、71、73、75、79、85、87、140、180、206、210。NTSC/PAL/Dendy。YM2413 72-slot。four-screen 在 cart 4KB NT。
 游戏会用到的非官方 6502（含 SHA/SHX/SHY/XAA/LAS）已实现。XAA 跟总线残留。
